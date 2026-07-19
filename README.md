@@ -1,25 +1,25 @@
-# Welcome to Next.js
+# 🚀 voom AI — แชท + เรียนรู้ + Deploy อัตโนมัติ
 
-This is the most minimal starter for your Next.js project.
+เว็บแชท AI ที่เรียนรู้ได้จริง + Deploy ขึ้น Vercel/Netlify ฟรี 1 คลิก
+ใช้แค่ HTML/CSS/JS ล้วน — รันได้ทุกที่ ไม่ต้องติดตั้ง
 
-## Deploy your own
+## ✨ ฟีเจอร์
+- 💬 แชทแบบสตรีมมิ่ง AI พิมพ์ตอบค่อยๆ
+- 🧠 ระบบ AI Learning จดจำสิ่งที่สอน ถาวร
+  - `จดจำ: ชื่อผมคือโต้`
+  - `ลืม: ชื่อผม`
+  - `voom รู้อะไรบ้าง`
+- 🚀 Deploy Center บิ้ว+ขึ้นคลาวด์อัตโนมัติ
+- 📜 ประวัติการ Deploy
+- 📱 Responsive มือถือ
+- 💾 บันทึก LocalStorage
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/vercel/next.js/tree/canary/examples/hello-world&project-name=hello-world&repository-name=hello-world)
+## 🛫 Deploy ฟรี 1 คลิก
+- ▲ Vercel: เปิดไฟล์ → กด Deploy → เริ่ม → เสร็จ
+- ◉ Netlify: ลากไฟล์วางที่ app.netlify.com/drop
 
-## How to use
-
-Execute [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) with [npm](https://docs.npmjs.com/cli/init), [Yarn](https://yarnpkg.com/lang/en/docs/cli/create/), or [pnpm](https://pnpm.io) to bootstrap the example:
-
-```bash
-npx create-next-app --example hello-world hello-world-app
-```
-
-```bash
-yarn create next-app --example hello-world hello-world-app
-```
-
-```bash
-pnpm create next-app --example hello-world hello-world-app
-```
-
-Deploy it to the cloud with [Vercel](https://vercel.com/new?utm_source=github&utm_medium=readme&utm_campaign=next-example) ([Documentation](https://nextjs.org/docs/deployment)).
+## 📁 โครงสร้าง
+- voom-ai.html  (ไฟล์หลัก)
+- vercel.json   (Config Vercel)
+- netlify.toml  (Config Netlify)
+- README.md     (คู่มือ)

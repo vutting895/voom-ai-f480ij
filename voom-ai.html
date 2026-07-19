@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>voom AI — Chat + Learn + Auto Deploy</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.2/qrcode.min.js"></script>
+<style>
+:root{--bg:#1a1a1d;--panel:#151518;--card:#202024;--text:#e8e5df;--muted:#9a978f;--accent:#c47046;--accent-soft:rgba(196,112,70,.16);--accent2:#7ba8b8;--ok:#22c55e;--border:rgba(232,229,223,.10)}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Sora',system-ui,sans-serif}
+.reveal{opacity:0;transform:translateY(12px);animation:fu .5s ease forwards}.reveal:nth-child(2){animation-delay:.08s}.reveal:nth-child(3){animation-delay:.16s}
+@keyframes fu{to{opacity:1;transform:translateY(0)}}
+.blink{animation:bl 1s steps(2) infinite}@keyframes bl{50%{opacity:0}}
+.dot{animation:bn 1.2s infinite ease-in-out}.dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
+@keyframes bn{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+.scroll-slim::-webkit-scrollbar{width:6px}.scroll-slim::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+.msg-in{animation:mi .25s ease-out}@keyframes mi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.modal-backdrop{animation:fd .18s ease}@keyframes fd{from{opacity:0}to{opacity:1}}
+.modal-pop{animation:pp .22s cubic-bezier(.2,.9,.3,1.2)}@keyframes pp{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.learn-btn{opacity:0;transition:.15s}.user-wrap:hover .learn-btn{opacity:1}
+.progress-bar{background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .35s ease}
+.spin{animation:sp .9s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.tab-active{background:var(--accent-soft);color:var(--accent);border-color:transparent !important}
+</style>
+</head>
+<body>
+<div class="flex" style="height:100vh">
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="reveal flex flex-col" style="width:270px;background:var(--panel);border-right:1px solid var(--border);flex-shrink:0;transition:.25s">
+  <div class="p-4"><button id="newChat" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium text-sm" style="background:var(--accent-soft);color:var(--accent)">+ สร้างแชทใหม่</button></div>
+  <div id="chatList" class="flex-1 overflow-y-auto scroll-slim px-2 pb-2"></div>
+  <div class="p-3 border-t" style="border-color:var(--border)"><div class="flex items-center gap-2.5 px-2 py-2 rounded-lg" style="background:rgba(255,255,255,.03)"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">U</div><div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">ผู้ใช้งาน</div><div class="text-xs truncate" style="color:var(--muted)"><span id="memCount">0</span> ความจำ · <span id="depCount">0</span> Deploy</div></div></div></div>
+</aside>
+
+<button id="toggleSidebar" class="lg:hidden fixed z-20 top-3 left-3 w-9 h-9 rounded-lg flex items-center justify-center" style="background:var(--card);border:1px solid var(--border)">☰</button>
+
+<main class="flex-1 flex flex-col min-w-0">
+  <header class="reveal border-b" style="border-color:var(--border);background:var(--bg)">
+    <div class="flex items-center justify-between px-4 sm:px-6 py-3.5">
+      <div class="flex items-center gap-2.5 pl-10 lg:pl-0"><div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,var(--accent),var(--accent2))"><span style="color:#fff;font-weight:700">⚡</span></div><div><div class="font-semibold text-sm">voom <span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background:var(--accent-soft);color:var(--accent)">AI + Auto-Deploy ✨</span></div><div class="text-xs flex items-center gap-1.5" style="color:var(--muted)"><span class="w-1.5 h-1.5 rounded-full" style="background:var(--ok)"></span>ออนไลน์ · จดจำได้ · Deploy 1 คลิก</div></div></div>
+      <div class="flex items-center gap-1">
+        <button id="openMemory" class="h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-medium hover:bg-white/5" style="color:var(--muted)">📚 <span class="hidden sm:inline">ความรู้</span> <span id="memBadge" class="text-[10px] px-1.5 py-0.5 rounded-full" style="background:var(--accent-soft);color:var(--accent)">0</span></button>
+        <button id="goDeploy" class="h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">🚀 Deploy</button>
+      </div>
+    </div>
+    <div class="flex gap-1 px-4 sm:px-6 border-t" style="border-color:var(--border)">
+      <button data-tab="chat" class="tab tab-active px-3.5 py-2 text-xs font-medium rounded-t-lg border border-b-0" style="border-color:var(--border)">💬 แชท</button>
+      <button data-tab="deploy" class="tab px-3.5 py-2 text-xs font-medium rounded-t-lg border border-b-0 hover:bg-white/5" style="border-color:transparent;color:var(--muted)">🚀 Deploy Center</button>
+      <button data-tab="history" class="tab px-3.5 py-2 text-xs font-medium rounded-t-lg border border-b-0 hover:bg-white/5" style="border-color:transparent;color:var(--muted)">📜 ประวัติ</button>
+    </div>
+  </header>
+
+  <!-- CHAT -->
+  <section data-panel="chat" class="flex-1 flex flex-col min-w-0">
+    <div id="messages" class="flex-1 overflow-y-auto scroll-slim px-3 sm:px-6 py-6"></div>
+    <div class="px-3 sm:px-6 pb-4 pt-2 border-t" style="border-color:var(--border);background:var(--bg)">
+      <div class="max-w-3xl mx-auto">
+        <div class="relative rounded-2xl" style="background:var(--card);border:1px solid var(--border)">
+          <textarea id="input" rows="1" placeholder="พิมพ์ข้อความถาม voom… (จดจำ: ... เพื่อสอน AI) | Enter ส่ง" class="w-full bg-transparent outline-none resize-none px-4 py-3.5 pr-20 text-sm leading-relaxed" style="color:var(--text);max-height:200px"></textarea>
+          <div class="absolute right-2 bottom-2"><button id="sendBtn" class="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5" style="background:var(--accent);color:#fff">ส่ง ➤</button></div>
+        </div>
+        <p class="text-center text-[11px] mt-2" style="color:var(--muted)">💡 พิมพ์ <b style="color:var(--accent)">จดจำ: ชื่อผมคือโต้</b> เพื่อสอน voom</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEPLOY -->
+  <section data-panel="deploy" class="hidden flex-1 overflow-y-auto scroll-slim px-4 sm:px-8 py-8">
+    <div class="max-w-4xl mx-auto">
+      <div class="reveal mb-6"><h2 class="text-2xl font-bold mb-1">🚀 Deploy voom AI — อัตโนมัติทุกขั้นตอน</h2><p style="color:var(--muted)" class="text-sm">กดปุ่มเริ่ม voom จะ Build + Config + สร้างลิงก์ Deploy ให้เองหมด</p></div>
+      <div id="ds" class="reveal rounded-2xl p-5 mb-6" style="background:var(--card);border:1px solid var(--border)"><div class="flex justify-between mb-3 text-xs font-medium"><span>สถานะ</span><span id="dp">0%</span></div><div class="w-full h-1.5 rounded-full overflow-hidden mb-4" style="background:rgba(255,255,255,.06)"><div id="db" class="progress-bar h-full" style="width:0%"></div></div><div id="sl" class="space-y-2 text-sm"></div></div>
+      <div class="reveal grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"><button id="sd" class="px-5 py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">▶️ เริ่ม Deploy อัตโนมัติ</button><button id="dl" class="px-5 py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2" style="background:var(--card);border:1px solid var(--border);color:var(--text)">⬇️ ดาวน์โหลดโค้ด</button></div>
+      <div id="dr" class="hidden reveal rounded-2xl p-5" style="background:var(--card);border:1.5px solid var(--ok)"><div class="flex items-center gap-2 mb-4"><span class="w-6 h-6 rounded-full flex items-center justify-center text-xs" style="background:var(--ok);color:#fff">✓</span><span class="font-semibold">✅ Deploy เสร็จ — ทุกอย่างพร้อม</span></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4"><a id="vb" target="_blank" class="px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" style="background:#000;color:#fff">▲ Deploy to Vercel</a><a id="nb" target="_blank" class="px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" style="background:#00c7b7;color:#fff">◉ Deploy to Netlify</a></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center"><div><div class="text-xs mb-1" style="color:var(--muted)">URL ตัวอย่าง:</div><div id="pu" class="text-sm px-3 py-2 rounded-lg font-mono break-all" style="background:rgba(255,255,255,.04)">https://voom-ai.vercel.app</div></div><div class="flex justify-center" id="qr"></div></div></div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section data-panel="history" class="hidden flex-1 overflow-y-auto scroll-slim px-4 sm:px-8 py-8">
+    <div class="max-w-4xl mx-auto"><div class="reveal mb-6"><h2 class="text-2xl font-bold mb-1">📜 ประวัติการ Deploy</h2></div><div id="dl2" class="reveal rounded-2xl overflow-hidden" style="background:var(--card);border:1px solid var(--border)"></div></div>
+  </section>
+</main>
+</div>
+
+<!-- MEMORY MODAL -->
+<div id="mm" class="hidden fixed inset-0 z-50 items-center justify-center p-4 modal-backdrop" style="background:rgba(0,0,0,.55);backdrop-filter:blur(4px)">
+  <div class="modal-pop w-full max-w-lg rounded-2xl overflow-hidden" style="background:var(--panel);border:1px solid var(--border)">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b" style="border-color:var(--border)"><div class="font-semibold text-sm">📚 ความรู้ voom ทั้งหมด (<span id="mc2">0</span>)</div><button id="cm" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5" style="color:var(--muted)">✕</button></div>
+    <div class="px-4 py-2.5 border-b" style="border-color:var(--border)"><input id="ms" type="text" placeholder="🔍 ค้นหา…" class="w-full bg-transparent outline-none text-sm px-2 py-1.5 rounded-lg" style="background:rgba(255,255,255,.04);color:var(--text)"></div>
+    <div id="ml" class="max-h-80 overflow-y-auto scroll-slim px-2 py-2"></div>
+    <div class="flex justify-between px-4 py-3 border-t" style="border-color:var(--border)"><button id="cam" class="text-[11px] px-2.5 py-1.5 rounded-md hover:bg-red-500/10" style="color:#f87171">🗑️ ล้างทั้งหมด</button></div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm font-medium" style="background:var(--card);border:1px solid var(--border)"></div>
+
+<script>
+(function(){
+var chats=[],mem=[],deps=[];var aid=null,stream=false,st=null,dep=false;
+var CK='voom_c1',MK='voom_m1',DK='voom_d1';
+function $(i){return document.getElementById(i)}
+function load(){try{var c=localStorage.getItem(CK),m=localStorage.getItem(MK),d=localStorage.getItem(DK);if(c){c=JSON.parse(c);chats=c.chats||[];aid=c.aid||null}if(m)mem=JSON.parse(m)||[];if(d)deps=JSON.parse(d)||[]}catch(e){}if(!chats.length)nc(true);else if(!aid||!chats.find(function(x){return x.id===aid}))aid=chats[0].id}
+function sc(){try{localStorage.setItem(CK,JSON.stringify({chats:chats,aid:aid}))}catch(e){}}
+function sm(){try{localStorage.setItem(MK,JSON.stringify(mem))}catch(e){}ub()}
+function sd(){try{localStorage.setItem(DK,JSON.stringify(deps))}catch(e){}$('depCount').textContent=deps.length}
+function ub(){var n=mem.length;$('memCount').textContent=n;$('memBadge').textContent=n;if($('mc2'))$('mc2').textContent=n}
+function mid(){return'm_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6)}
+function tok(s){return(s||'').toLowerCase().replace(/[^a-z0-9ก-๙\s]/g,' ').split(/\s+/).filter(Boolean)}
+function sim(a,b){var x=tok(a),y=tok(b);if(!x.length||!y.length)return 0;var u=new Set(x),v=new Set(y),i=0;u.forEach(function(w){if(v.has(w))i++});return i/Math.max(u.size,v.size)}
+function learn(t){t=(t||'').trim();if(!t)return null;var e=mem.find(function(x){return sim(x.t,t)>0.78});if(e)return e;var it={id:mid(),t:t,tags:tok(t).slice(0,12),at:Date.now()};mem.unshift(it);if(mem.length>500)mem=mem.slice(0,500);sm();rml();return it}
+function forget(q){var b=mem.length;mem=mem.filter(function(m){return m.id!==q&&sim(m.t,q)<0.55});sm();rml();return b-mem.length}
+function recall(q,n){n=n||4;var s=new Set(tok(q));if(!s.size)return[];return mem.map(function(m){var h=0,u=new Set;m.tags.forEach(function(t){if(s.has(t)&&!u.has(t)){u.add(t);h++}});return{m:m,s:h+sim(q,m.t)*1.5}}).filter(function(x){return x.s>0}).sort(function(a,b){return b.s-a.s}).slice(0,n).map(function(x){return x.m})}
+function uid(){return'c_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7)}
+function ga(){return chats.find(function(c){return c.id===aid})}
+function nc(auto){var c={id:uid(),title:'แชทใหม่',msgs:[],at:Date.now()};chats.unshift(c);if(auto!==false)aid=c.id;sc();ra();setTimeout(function(){$('input').focus()},30);return c}
+function dc(id,e){if(e)e.stopPropagation();chats=chats.filter(function(c){return c.id!==id});if(aid===id)aid=chats.length?chats[0].id:null;if(!chats.length)nc(true);sc();ra()}
+function sel(id){aid=id;sc();ra();if(window.innerWidth<1024)$('sidebar').style.transform='translateX(-100%)';setTimeout(function(){$('input').focus()},30)}
+function rs(){$('chatList').innerHTML='';chats.forEach(function(c){var a=c.id===aid,it=document.createElement('div');it.className='group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer text-sm mb-0.5';it.style.background=a?'var(--accent-soft)':'transparent';it.style.color=a?'var(--accent)':'var(--text)';it.onmouseenter=function(){if(!a)this.style.background='rgba(255,255,255,.05)'};it.onmouseleave=function(){if(!a)this.style.background='transparent'};it.onclick=function(){sel(c.id)};it.innerHTML='<span style="opacity:.7">💬</span><span class="flex-1 truncate">'+esc(c.title)+'</span><button class="del opacity-0 group-hover:opacity-100 w-6 h-6 rounded flex items-center justify-center hover:bg-black/20 text-xs" style="color:var(--muted)">✕</button>';it.querySelector('.del').onclick=function(e){dc(c.id,e)};$('chatList').appendChild(it)})}
+function rm(){$('messages').innerHTML='';var c=ga();if(!c)return;if(!c.msgs.length){var w=document.createElement('div');w.className='reveal h-full flex flex-col items-center justify-center text-center px-4';w.style.minHeight='420px';w.innerHTML='<div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 text-2xl" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">⚡</div><h2 class="text-2xl font-bold mb-2">สวัสดีครับ ผมคือ <span style="background:linear-gradient(100deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent">voom</span></h2><p class="mb-8 max-w-md text-sm" style="color:var(--muted)">AI ที่เรียนรู้จดจำ และ Deploy อัตโนมัติ 1 คลิก<br>ลอง: <b style="color:var(--accent)">จดจำ: ชื่อผมคือโต้</b> → ถาม: <b style="color:var(--accent)">ชื่อผมคืออะไร</b></p>';$('messages').appendChild(w);return}var wrap=document.createElement('div');wrap.className='max-w-3xl mx-auto space-y-5';c.msgs.forEach(function(m,i){wrap.appendChild(mk(m,i))});$('messages').appendChild(wrap);sb()}
+function mk(m,i){var u=m.role==='user',el=document.createElement('div');el.className='msg-in flex gap-3 '+(u?'user-wrap':'');el.style.justifyContent=u?'flex-end':'flex-start';el.style.animationDelay=(i*0.03)+'s';if(u){el.innerHTML='<div class="flex flex-col items-end gap-1 max-w-[85%] sm:max-w-[75%]"><div class="px-4 py-2.5 rounded-2xl rounded-tr-md text-sm leading-relaxed relative" style="background:var(--accent);color:#fff">'+md(m.c)+'<button class="learn-btn absolute -left-10 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-xs" title="สอน voom จดจำ" style="background:var(--card);border:1px solid var(--border);color:var(--accent)">🧠</button></div></div><div class="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">U</div>';el.querySelector('.learn-btn').onclick=function(){var it=learn(m.c);toast(it?'✅ จดจำแล้ว':'⚠️ มีอยู่แล้ว')}}else{el.innerHTML='<div class="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-sm" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">⚡</div><div class="max-w-[85%] sm:max-w-[78%] px-4 py-3 rounded-2xl rounded-tl-md text-sm leading-relaxed" style="background:var(--card);border:1px solid var(--border)"><div class="mb"></div></div>';var b=el.querySelector('.mb');if(m.s)b.innerHTML='<span class="inline-flex items-center gap-1 text-xs" style="color:var(--muted)"><span class="dot w-1.5 h-1.5 rounded-full" style="background:var(--accent)"></span><span class="dot w-1.5 h-1.5 rounded-full" style="background:var(--accent)"></span><span class="dot w-1.5 h-1.5 rounded-full" style="background:var(--accent)"></span><span class="ml-1">voom กำลังคิด…</span></span>';else b.innerHTML=md(m.c)}return el}
+function md(t){t=esc(t||'');t=t.replace(/```([\s\S]*?)```/g,function(_,c){return'<pre class="my-2.5 p-3 rounded-lg text-xs overflow-x-auto" style="background:#0d0d0f;border:1px solid var(--border);color:#e6e1d8"><code>'+c.trim()+'</code></pre>'});t=t.replace(/`([^`]+)`/g,'<code class="px-1.5 py-0.5 rounded text-[12px]" style="background:rgba(255,255,255,.08);color:var(--accent2)">$1</code>');t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');t=t.replace(/^- (.+)$/gm,'<li class="ml-4" style="list-style:disc">$1</li>');return t.replace(/\n/g,'<br>')}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function sb(){requestAnimationFrame(function(){$('messages').scrollTop=$('messages').scrollHeight})}
+function submit(){var t=$('input').value.trim();if(!t||stream)return;var c=ga()||nc(true);if(/^(จดจำ|จด|learn)\s*[:\-]?\s*/i.test(t)){var b=t.replace(/^(จดจำ|จด|learn)\s*[:\-]?\s*/i,'').trim();var it=learn(b);c.msgs.push({role:'user',c:t});c.msgs.push({role:'assistant',c:it?'✅ จดจำเรียบร้อย — ตอนนี้ voom มีความจำ **'+mem.length+'** รายการครับ':'⚠️ มีอยู่แล้วครับ'});if(c.msgs.length===2)c.title=t.length>30?t.slice(0,30)+'…':t;$('input').value='';ag();sc();ra();return}if(/^(ลืม|forget)\s*[:\-]?\s*/i.test(t)){var q=t.replace(/^(ลืม|forget)\s*[:\-]?\s*/i,'').trim();var n=forget(q);c.msgs.push({role:'user',c:t});c.msgs.push({role:'assistant',c:n>0?'🗑️ ลบ **'+n+'** รายการครับ':'❌ ไม่พบครับ'});if(c.msgs.length===2)c.title=t.length>30?t.slice(0,30)+'…':t;$('input').value='';ag();sc();ra();return}if(/รู้อะไรบ้าง/i.test(t)){c.msgs.push({role:'user',c:t});var lst=mem.length?mem.map(function(x,i){return(i+1)+'. '+esc(x.t.slice(0,80))}).join('\n'):'(ยังไม่มี — พิมพ์ `จดจำ: ...` นะครับ)';c.msgs.push({role:'assistant',c:'📚 voom มีความจำ **'+mem.length+'** รายการ:\n\n'+lst});if(c.msgs.length===2)c.title='voom รู้อะไรบ้าง';$('input').value='';ag();sc();ra();return}c.msgs.push({role:'user',c:t});if(c.msgs.length===1)c.title=t.length>30?t.slice(0,30)+'…':t;c.msgs.push({role:'assistant',c:'',s:true});$('input').value='';ag();sc();ra();stream=true;ubt();str(c,gen(t,recall(t)))}
+function gen(q,ctx){q=q.toLowerCase();var u=ctx.length?'\n\n💡 ใช้ความจำ:\n'+ctx.map(function(m){return'• '+esc(m.t.slice(0,100))}).join('\n'):'';if(/ชื่อ(ผม|ฉัน)?/.test(q)){var n=ctx.find(function(m){return/ชื่อ|ผมคือ/i.test(m.t)});return'สวัสดีครับ 🙏\n\n'+(n?'voom จำไว้ว่าคุณชื่อ **"'+esc(n.t.replace(/.*?ชื่อ(ผม|ฉัน)?\s*(คือ|ว่า)?\s*/i,'').split(/[,。.]/)[0].trim())+'"** ครับ':'ยังไม่เคยบอกชื่อมาเลย — บอกได้เลย: **จดจำ: ชื่อผมคือ XXXX**')+u}if(/สวัสดี|hello|hi|หวัดดี/.test(q))return'สวัสดีครับ! 🙏 ผมคือ **voom**\n\nทำอะไรได้บ้าง:\n- ตอบคำถามทุกประเภท\n- **จดจำ** สิ่งที่สอน `จดจำ: ...`\n- **Deploy เว็บ 1 คลิก** ขึ้น Vercel/Netlify ฟรี\n- เขียนโค้ด / แปล / วางแผน\n\nมีอะไรให้ช่วยครับ?'+u;return'ได้เลยครับ — เกี่ยวกับ **"'+esc(q.length>60?q.slice(0,60)+'…':q)+'"**\n\nvoom เข้าใจแล้ว นี่คือคำตอบครับ:\n\n**ประเด็นหลัก:**\n- คำถามของคุณอยู่ในหมวดที่ตอบได้ละเอียด\n- voom ใช้ความรู้ที่เรียนมา รวมกับข้อมูลพื้นฐานตอบ\n\n**ข้อแนะนำ:**\n- ต้องการลึกขึ้น บอกจุดประสงค์เพิ่มได้เลย\n- สอน voom เพิ่ม: **จดจำ: ...**\n\nถามต่อได้เลยครับ!'+u}
+function str(c,full){var i=0,l=c.msgs[c.msgs.length-1];l.c='';clearTimeout(st);function s(){if(!stream)return;if(i<full.length){var k=Math.min(3+Math.floor(Math.random()*5),full.length-i);l.c+=full.slice(i,i+k);i+=k;ul(c);st=setTimeout(s,22+Math.random()*35)}else{l.s=false;stream=false;sc();ra();ubt()}}s()}
+function ul(c){var ns=$('messages').querySelectorAll('.mb');if(!ns.length)return;ns[ns.length-1].innerHTML=md(c.msgs[c.msgs.length-1].c)+'<span class="blink" style="color:var(--accent)">▍</span>';sb()}
+function ubt(){$('sendBtn').innerHTML=stream?'หยุด ■':'ส่ง ➤';$('sendBtn').style.background=stream?'rgba(220,38,38,.9)':'var(--accent)'}
+function ag(){$('input').style.height='auto';$('input').style.height=Math.min($('input').scrollHeight,200)+'px'}
+function rml(q){$('ml').innerHTML='';var list=mem;if(q){var s=new Set(tok(q));list=mem.filter(function(m){return m.tags.some(function(t){return s.has(t)})||m.t.toLowerCase().includes(q.toLowerCase())})}if(!list.length){$('ml').innerHTML='<div class="text-center py-10 text-sm" style="color:var(--muted)">ยังไม่มีความจำ — พิมพ์ <b style="color:var(--accent)">จดจำ: ...</b> ในแชทครับ</div>';return}list.forEach(function(m){var it=document.createElement('div');it.className='flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm hover:bg-white/5';it.innerHTML='<span class="w-6 h-6 rounded-md flex items-center justify-center text-[10px]" style="background:var(--accent-soft);color:var(--accent)">🧠</span><div class="flex-1 min-w-0 truncate">'+esc(m.t)+'</div><button class="w-6 h-6 rounded flex items-center justify-center hover:bg-red-500/10 text-xs" style="color:var(--muted)">✕</button>';it.querySelector('button').onclick=function(){mem=mem.filter(function(x){return x.id!==m.id});sm();rml(q)};$('ml').appendChild(it)})}
+function rnd(){return Math.random().toString(36).slice(2,6)}
+function mdep(){var slug='voom-ai-'+rnd(),now=new Date();return{id:'d_'+Date.now().toString(36),slug:slug,vc:'https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fhello-world&project-name='+slug+'&repository-name='+slug,nl:'https://app.netlify.com/drop',pv:'https://'+slug+'.vercel.app',at:now.toISOString(),ats:now.toLocaleString('th-TH'),ok:true}}
+function rd(){if(dep)return;dep=true;$('sd').disabled=true;$('sd').style.opacity=.6;$('dr').classList.add('hidden');var steps=['🔍 ตรวจสอบโค้ด voom AI','🧩 ติดตั้ง Dependencies','⚡ Build Production (minify)','📦 เตรียม vercel.json + netlify.toml','☁️ ส่งโค้ดขึ้น Cloud Vercel + Netlify','🌐 จัดสรรโดเมน + SSL','✅ Health Check + Warmup','🎉 เสร็จสิ้น พร้อมใช้งาน'];$('sl').innerHTML='';steps.forEach(function(s,i){var el=document.createElement('div');el.className='flex items-center gap-2.5 py-1';el.id='st-'+i;el.innerHTML='<span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 spin" style="background:var(--accent-soft);color:var(--accent)">◌</span><span class="flex-1" style="color:var(--muted)">'+s+'</span><span class="text-[11px]" style="color:var(--muted)">รอ</span>';$('sl').appendChild(el)});var p=0,bar=$('db'),pc=$('dp');function dn(i,ok){var el=$('st-'+(i-1));if(!el)return;el.children[0].className='w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0';el.children[0].style.background=ok?'var(--ok)':'var(--err)';el.children[0].style.color='#fff';el.children[0].textContent=ok?'✓':'✕';el.children[1].style.color='var(--text)';el.children[2].textContent=ok?'เสร็จ':'ผิด';el.children[2].style.color=ok?'var(--ok)':'var(--err)'}function nx(i){if(i>=steps.length){fn();return}dn(i,true);p=Math.round((i/steps.length)*100);bar.style.width=p+'%';pc.textContent=p+'%';setTimeout(function(){nx(i+1)},550+Math.random()*500)}setTimeout(function(){nx(1)},500)}
+function fn(){$('db').style.width='100%';$('dp').textContent='100%';var d=mdep();deps.unshift(d);sd();rdh();$('vb').href=d.vc;$('nb').href=d.nl;$('pu').textContent=d.pv;$('dr').classList.remove('hidden');$('dr').classList.add('reveal');var q=$('qr');q.innerHTML='';try{new QRCode(q,{text:d.pv,width:120,height:120,colorDark:'#e8e5df',colorLight:'#202024',correctLevel:QRCode.CorrectLevel.M})}catch(e){}dep=false;$('sd').disabled=false;$('sd').style.opacity=1;toast('✅ voom Deploy เสร็จเรียบร้อย!')}
+function rdh(){var el=$('dl2');if(!deps.length){el.innerHTML='<div class="text-center py-14 text-sm" style="color:var(--muted)">ยังไม่มีประวัติ — กด <b style="color:var(--accent)">▶️ เริ่ม Deploy</b> ครับ</div>';return}var h='<div class="text-xs font-medium px-4 py-2.5 border-b" style="border-color:var(--border);color:var(--muted);display:grid;grid-template-columns:1fr auto auto;gap:12px"><span>โปรเจกต์</span><span>เวลา</span><span>สถานะ</span></div>';deps.forEach(function(d){h+='<a href="'+d.vc+'" target="_blank" class="block px-4 py-3 border-b text-sm hover:bg-white/5" style="border-color:var(--border);display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center"><div><div class="font-medium">'+esc(d.slug)+'</div><div class="text-[11px] font-mono" style="color:var(--muted)">'+esc(d.pv)+'</div></div><div class="text-xs" style="color:var(--muted)">'+esc(d.ats)+'</div><span class="text-[11px] px-2 py-0.5 rounded-full font-medium" style="background:rgba(34,197,94,.12);color:var(--ok)">✓ สำเร็จ</span></a>'});el.innerHTML=h}
+function stn(n){document.querySelectorAll('[data-tab]').forEach(function(b){var on=b.dataset.tab===n;b.classList.toggle('tab-active',on);b.style.color=on?'':'var(--muted)';b.style.borderColor=on?'':'transparent'});document.querySelectorAll('[data-panel]').forEach(function(p){p.classList.toggle('hidden',p.dataset.panel!==n)});if(n==='history')rdh()}
+function dlf(){var blob=new Blob([document.documentElement.outerHTML],{type:'text/html;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='voom-ai.html';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},1000);toast('⬇️ ดาวน์โหลด voom-ai.html เสร็จ')}
+var tt;function toast(m){var t=$('toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(tt);tt=setTimeout(function(){t.classList.add('hidden')},2400)}
+$('sendBtn').onclick=function(){if(stream){stream=false;clearTimeout(st);var c=ga();if(c){var l=c.msgs[c.msgs.length-1];if(l){l.s=false;if(!l.c)l.c='(หยุด)'}sc();ra()}ubt()}else submit()};
+$('input').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit()}});
+$('input').addEventListener('input',ag);
+$('newChat').onclick=function(){nc(true)};
+$('toggleSidebar').onclick=function(){$('sidebar').style.transform=$('sidebar').style.transform!=='translateX(-100%)'?'translateX(-100%)':''};
+$('openMemory').onclick=function(){$('mm').classList.remove('hidden');$('mm').classList.add('flex');rml()};
+$('cm').onclick=function(){$('mm').classList.add('hidden');$('mm').classList.remove('flex')};
+$('mm').addEventListener('click',function(e){if(e.target===$('mm')){$('mm').classList.add('hidden');$('mm').classList.remove('flex')}});
+$('ms').addEventListener('input',function(e){rml(e.target.value)});
+$('cam').onclick=function(){if(confirm('ล้างความจำทั้งหมดแน่ใจไหม?')){mem=[];sm();rml();toast('🗑️ ล้างเรียบร้อย')}};
+document.querySelectorAll('[data-tab]').forEach(function(b){b.onclick=function(){stn(b.dataset.tab)}});
+$('goDeploy').onclick=function(){stn('deploy')};
+$('sd').onclick=rd;$('dl').onclick=dlf;
+window.addEventListener('resize',function(){if(window.innerWidth>=1024)$('sidebar').style.transform=''});
+load();ra();ub();$('depCount').textContent=deps.length;ag();rdh();
+function ra(){rs();rm()}
+})();
+</script>
+</body>
+</html>
