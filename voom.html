@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 voom AI + Firebase</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --ai-msg: #1e293b;
+            --user-msg: #2563eb;
+            --firebase: #ffca28;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .app-container {
+            width: 100%;
+            max-width: 600px;
+            background-color: var(--bg);
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+        }
+        header {
+            padding: 1rem;
+            background-color: var(--card);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 1.2rem; }
+        .tabs { display: flex; gap: 0.5rem; }
+        .tab-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.3rem 0.8rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .tab-btn.active { background-color: var(--primary); border-color: var(--primary); }
+        
+        .view { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+        .view.active { display: flex; }
+
+        /* Chat View */
+        #chat-box {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+        .message {
+            max-width: 80%;
+            padding: 0.8rem 1rem;
+            border-radius: 1rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+        .ai { background-color: var(--ai-msg); border-bottom-left-radius: 0.2rem; align-self: flex-start; }
+        .user { background-color: var(--user-msg); color: white; border-bottom-right-radius: 0.2rem; align-self: flex-end; }
+        
+        .input-area {
+            padding: 1rem;
+            background-color: var(--card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.5rem;
+        }
+        #user-input {
+            flex: 1;
+            padding: 0.8rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            background-color: var(--bg);
+            color: var(--text);
+            outline: none;
+        }
+        #send-btn {
+            padding: 0.8rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            background-color: var(--primary);
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #send-btn:hover { background-color: var(--primary-hover); }
+        .cursor { display: inline-block; width: 8px; height: 15px; background-color: var(--text); animation: blink 1s infinite; vertical-align: middle; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* Deploy View */
+        #deploy-view { padding: 1rem; overflow-y: auto; }
+        .deploy-card {
+            background-color: var(--card);
+            padding: 1.5rem;
+            border-radius: 0.8rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+        }
+        .firebase-badge {
+            display: inline-block; background-color: var(--firebase); color: #000;
+            padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .deploy-btn {
+            display: block;
+            width: 100%;
+            padding: 1rem;
+            margin-top: 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            background-color: var(--primary);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .deploy-btn:hover { background-color: var(--primary-hover); }
+        .log-box {
+            background-color: #000;
+            color: #0f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            min-height: 100px;
+            white-space: pre-wrap;
+        }
+        .history-item {
+            background-color: var(--bg);
+            padding: 0.8rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        #loading-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg); display: flex; align-items: center; justify-content: center;
+            z-index: 10; flex-direction: column; gap: 1rem;
+        }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); width: 40px; height: 40px; border-radius: 50%; border-left-color: var(--primary); animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen">
+    <div class="spinner"></div>
+    <p>กำลังเชื่อมต่อ Firebase...</p>
+    <p style="font-size: 0.8rem; color: #94a3b8;">*หากค้าง ให้ตรวจสอบการตั้งค่า Firebase Config และกฎ Firestore</p>
+</div>
+
+<div class="app-container">
+    <header>
+        <h1>🚀 voom AI <span style="font-size: 0.7rem; color: #ffca28;">Firebase Edition</span></h1>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('chat')">แชท</button>
+            <button class="tab-btn" onclick="switchTab('deploy')">Deploy</button>
+        </div>
+    </header>
+
+    <!-- Chat View -->
+    <div id="chat-view" class="view active">
+        <div id="chat-box"></div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="พิมพ์ข้อความหรือสอน AI เช่น จดจำ: ผมชอบหมา" onkeypress="handleKeyPress(event)">
+            <button id="send-btn" onclick="sendMessage()">ส่ง</button>
+        </div>
+    </div>
+
+    <!-- Deploy View -->
+    <div id="deploy-view" class="view">
+        <div class="deploy-card">
+            <span class="firebase-badge">Cloud Firestore</span>
+            <h3>📊 สถานะระบบ</h3>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 0.5rem;">ข้อมูลแชท, ความจำ AI, และประวัติ Deploy ถูกบันทึกบน Cloud แบบเรียลไทม์</p>
+        </div>
+
+        <div class="deploy-card">
+            <h3>🔥 Firebase Hosting Deploy</h3>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 0.5rem;">จำลองการ Deploy แอปของคุณขึ้น Firebase Hosting</p>
+            <button class="deploy-btn" onclick="simulateDeploy('Firebase')">Deploy to Firebase</button>
+            <div class="log-box" id="firebase-log">รอคำสั่ง Deploy...</div>
+        </div>
+
+        <div class="deploy-card">
+            <h3>📜 ประวัติการ Deploy (จาก Cloud)</h3>
+            <div id="history-list" style="margin-top: 1rem;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. ใส่ Firebase Config ของคุณที่นี่
+    // ==========================================
+    const firebaseConfig = {// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBRvvnhRHSjAHZQ3s-SagmHOIQInJyQe6c",
+  authDomain: "planning-with-ai-df2fe.firebaseapp.com",
+  projectId: "planning-with-ai-df2fe",
+  storageBucket: "planning-with-ai-df2fe.firebasestorage.app",
+  messagingSenderId: "646624263999",
+  appId: "1:646624263999:web:edaf659ba3f42499e51d8a"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+        apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXX",
+        authDomain: "your-project.firebaseapp.com",
+        projectId: "your-project",
+        storageBucket: "your-project.appspot.com",
+        messagingSenderId: "XXXXXXXXXX",
+        appId: "1:XXXXXXXXXX:web:XXXXXXXXXX"
+    };
+
+    // เริ่มต้น Firebase
+    let db;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        document.getElementById('loading-screen').style.display = 'none';
+    } catch (e) {
+        document.getElementById('loading-screen').innerHTML = '<p style="color:red;">โปรดใส่ Firebase Config ให้ถูกต้อง!</p>';
+        throw new Error("Firebase Config Error");
+    }
+
+    // ==========================================
+    // 2. ระบบแชทและ AI
+    // ==========================================
+    const chatBox = document.getElementById('chat-box');
+    const userInput = document.getElementById('user-input');
+    let isAiTyping = false;
+
+    // โหลดข้อมูลแชทแบบเรียลไทม์
+    db.collection('chats').orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        chatBox.innerHTML = '';
+        if (snapshot.empty) {
+            addMessage("สวัสดีครับ! ผมคือ voom AI (เวอร์ชันคลาวด์) ข้อมูลของเราจะถูกเก็บไว้บน Firebase ตลอดไป", 'ai', false);
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                addMessage(msg.text, msg.sender, false);
+            });
+        }
+        // โหลดประวัติ Deploy
+        loadDeployHistory();
+    });
+
+    function switchTab(tab) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        if (tab === 'chat') {
+            document.getElementById('chat-view').classList.add('active');
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        } else {
+            document.getElementById('deploy-view').classList.add('active');
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        }
+    }
+
+    function addMessage(text, sender, save = true) {
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message', sender);
+        msgDiv.innerHTML = text;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        
+        if (save) {
+            db.collection('chats').add({
+                text: text,
+                sender: sender,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    }
+
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') sendMessage();
+    }
+
+    async function sendMessage() {
+        if (isAiTyping) return;
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        addMessage(text, 'user');
+        userInput.value = '';
+        isAiTyping = true;
+
+        let response = "";
+        
+        // AI Learning Logic
+        if (text.startsWith('จดจำ:')) {
+            const fact = text.replace('จดจำ:', '').trim();
+            if (fact) {
+                await db.collection('memory').add({ fact: fact, created: Date.now() });
+                response = "บันทึกในความทรงจำคลาวด์ถาวรเรียบร้อยแล้วครับ!";
+            } else {
+                response = "คุณต้องการให้ผมจดจำอะไรเหรอครับ?";
+            }
+        } else if (text.startsWith('ลืม:')) {
+            const factToForget = text.replace('ลืม:', '').trim();
+            const memoryRef = db.collection('memory');
+            const snapshot = await memoryRef.where('fact', '>=', factToForget).where('fact', '<=', factToForget + '\uf8ff').get();
+            
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => {
+                if (doc.data().fact.includes(factToForget)) batch.delete(doc.ref);
+            });
+            await batch.commit();
+            response = `ลืมเรื่อง "${factToForget}" ทิ้งจากระบบคลาวด์หมดแล้วครับ`;
+
+        } else if (text === 'voom รู้อะไรบ้าง') {
+            const snapshot = await db.collection('memory').get();
+            if (!snapshot.empty) {
+                let facts = [];
+                snapshot.forEach(doc => facts.push(doc.data().fact));
+                response = "สิ่งที่ผมจดจำได้จากคลาวด์:\n- " + facts.join('\n- ');
+            } else {
+                response = "ตอนนี้ผมยังไม่รู้อะไรเลย ลองสอนผมสิ่งใหม่ๆ ได้เลยครับ";
+            }
+        } else {
+            // ดึง Context จาก Memory
+            const snapshot = await db.collection('memory').get();
+            let memoryContext = "";
+            snapshot.forEach(doc => {
+                const fact = doc.data().fact;
+                if (text.includes(fact.split('คือ')[1] || fact)) {
+                    memoryContext = `(จากความทรงจำ: ${fact}) `;
+                }
+            });
+            response = `คุณพูดเรื่อง "${text}" ใช่ไหม? ${memoryContext}ผมเป็น AI ที่เรียนรู้ได้`;
+        }
+
+        await streamMessage(response);
+        isAiTyping = false;
+    }
+
+    function streamMessage(text) {
+        return new Promise(resolve => {
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('message', 'ai');
+            chatBox.appendChild(msgDiv);
+            
+            let i = 0;
+            const interval = setInterval(() => {
+                if (i < text.length) {
+                    msgDiv.innerHTML = text.substring(0, i+1) + '<span class="cursor"></span>';
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                    i++;
+                } else {
+                    clearInterval(interval);
+                    msgDiv.innerHTML = text;
+                    // บันทึกลง Firebase
+                    db.collection('chats').add({
+                        text: text,
+                        sender: 'ai',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    resolve();
+                }
+            }, 20);
+        });
+    }
+
+    // ==========================================
+    // 3. ระบบ Deploy
+    // ==========================================
+    async function simulateDeploy(platform) {
+        const logBox = document.getElementById('firebase-log');
+        logBox.innerText = "";
+        const btns = document.querySelectorAll('.deploy-btn');
+        btns.forEach(b => b.disabled = true);
+        
+        const steps = [
+            "🔥 กำลังเชื่อมต่อ Firebase CLI...",
+            "📦 กำลังรวบรวมไฟล์...",
+            "⚙️ กำลังติดตั้ง Dependencies...",
+            "🏗️ กำลัง Build โปรเจกต์...",
+            "🚀 กำลังอัปโหลดไปยัง Firebase Hosting...",
+            "✅ Deploy สำเร็จ!"
+        ];
+
+        for (let i = 0; i < steps.length; i++) {
+            await new Promise(r => setTimeout(r, 800));
+            logBox.innerText += steps[i] + "\n";
+        }
+
+        const time = new Date().toLocaleString('th-TH');
+        await db.collection('deploys').add({
+            platform: platform,
+            time: time,
+            status: "Success",
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        btns.forEach(b => b.disabled = false);
+    }
+
+    // โหลดประวัติ Deploy แบบเรียลไทม์
+    function loadDeployHistory() {
+        db.collection('deploys').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+            const histDiv = document.getElementById('history-list');
+            if (snapshot.empty) {
+                histDiv.innerHTML = "<p style='color:#64748b; font-size:0.85rem;'>ยังไม่มีประวัติการ Deploy</p>";
+                return;
+            }
+            histDiv.innerHTML = "";
+            snapshot.forEach(doc => {
+                const dep = doc.data();
+                const item = document.createElement('div');
+                item.classList.add('history-item');
+                item.innerHTML = `<span><strong>${dep.platform}</strong> - ${dep.time}</span><span style="color: #10b981;">${dep.status}</span>`;
+                histDiv.appendChild(item);
+            });
+        });
+    }
+</script>
+</body>
+</html>
