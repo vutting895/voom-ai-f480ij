@@ -1,0 +1,6 @@
+{
+  "name": "voom AI",
+  "description": "voom AI is an intelligent chat agent equipped with tool calling (time, math, Wikipedia), live agent thought streaming, and automated RAG memory logging.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
