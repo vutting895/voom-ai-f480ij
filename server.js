@@ -31,7 +31,8 @@ async function authenticateSupabaseUser(req, res, next) {
   }
 
   try {
-    const authResponse = await fetch(\`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/user\`, {
+    const authUrl = supabaseUrl.replace(/\/+$/, '') + '/auth/v1/user';
+    const authResponse = await fetch(authUrl, {
       method: 'GET',
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${tokenMatch[1]}` },
       signal: AbortSignal.timeout(5000)
