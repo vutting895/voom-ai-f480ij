@@ -108,14 +108,9 @@ test("verified Supabase token resolves to its own immutable user identity", asyn
   });
 });
 
-test("caller-supplied user ID cannot override the verified Supabase identity", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me", {
-    method: "GET",
-    headers: {
-      authorization: "Bearer user-a-access-token",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ userId: "00000000-0000-4000-8000-00000000000b" }),
+test("caller-supplied user ID query cannot override the verified Supabase identity", async () => {
+  const response = await fetch(baseUrl + "/api/auth/me?userId=00000000-0000-4000-8000-00000000000b", {
+    headers: { authorization: "Bearer user-a-access-token" },
   });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).userId, "00000000-0000-4000-8000-00000000000a");
