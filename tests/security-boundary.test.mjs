@@ -4,11 +4,12 @@ import test from "node:test";
 
 const server = readFileSync(new URL("../server.js", import.meta.url), "utf8");
 
-test("API authentication fails closed when the service token is absent", () => {
-  assert.match(server, /if \(!VOOM_API_AUTH_TOKEN\)/);
-  assert.match(server, /API_AUTH_NOT_CONFIGURED/);
-  assert.match(server, /authorization\.startsWith\('Bearer '\)/);
-  assert.match(server, /timingSafeEqual/);
+test("API authentication uses verified Supabase user identity and fails closed", () => {
+  assert.match(server, /SUPABASE_URL/);
+  assert.match(server, /SUPABASE_PUBLISHABLE_KEY/);
+  assert.match(server, /supabaseAuth\.auth\.getUser\(accessToken\)/);
+  assert.match(server, /SUPABASE_AUTH_NOT_CONFIGURED/);
+  assert.match(server, /req\.user = Object\.freeze\(\{ id: data\.user\.id \}\)/);
   assert.ok(server.indexOf("app.use('/api',") < server.indexOf("app.use(express.json({ limit: '64kb' }))"), "authenticate before parsing the body");
 });
 
@@ -29,8 +30,9 @@ test("arbitrary custom URL fetch is not exposed as an AI tool", () => {
   assert.match(server, /z\.enum\(\['crypto', 'joke', 'weather'\]\)/);
 });
 
-test("API endpoints cannot be used without service authentication", () => {
+test("authenticated identity endpoint is mounted behind the Supabase API guard", () => {
   const guard = server.indexOf("app.use('/api',");
-  const route = server.indexOf("app.post('/api/chat'");
+  const route = server.indexOf("app.get('/api/auth/me'");
   assert.ok(guard >= 0 && route > guard);
+  assert.match(server, /userId: req\.user\.id/);
 });
