@@ -15,6 +15,11 @@ before(async () => {
       return;
     }
     const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+    if (token === "auth-provider-error-token") {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ message: "Auth service unavailable" }));
+      return;
+    }
     const users = {
       "user-a-access-token": { id: "00000000-0000-4000-8000-00000000000a", aud: "authenticated", role: "authenticated" },
       "user-b-access-token": { id: "00000000-0000-4000-8000-00000000000b", aud: "authenticated", role: "authenticated" },
@@ -75,6 +80,14 @@ test("API denies access tokens rejected by the Supabase Auth endpoint", async ()
   assert.equal(response.status, 401);
 });
 
+test("API returns 503 when the Supabase Auth provider is unavailable", async () => {
+  const response = await fetch(baseUrl + "/api/auth/me", {
+    headers: { authorization: "Bearer auth-provider-error-token" },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "AUTH_PROVIDER_UNAVAILABLE");
+});
+
 test("API rejects oversized unauthenticated bodies before JSON parsing", async () => {
   const response = await fetch(baseUrl + "/api/chat", {
     method: "POST",
@@ -93,6 +106,19 @@ test("verified Supabase token resolves to its own immutable user identity", asyn
     userId: "00000000-0000-4000-8000-00000000000a",
     authenticated: true,
   });
+});
+
+test("caller-supplied user ID cannot override the verified Supabase identity", async () => {
+  const response = await fetch(baseUrl + "/api/auth/me", {
+    method: "GET",
+    headers: {
+      authorization: "Bearer user-a-access-token",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ userId: "00000000-0000-4000-8000-00000000000b" }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).userId, "00000000-0000-4000-8000-00000000000a");
 });
 
 test("different Supabase token resolves to a different user identity", async () => {
