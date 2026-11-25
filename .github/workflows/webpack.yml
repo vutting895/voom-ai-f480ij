@@ -29,4 +29,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m compileall -q services/agent-python/app
+      - name: Install Python service dependencies
+        working-directory: services/agent-python
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python service
+        run: python -m compileall -q services/agent-python/app
+      - name: Run authentication unit tests
+        working-directory: services/agent-python
+        run: python -m unittest discover -s tests -v
+      - name: Import application
+        working-directory: services/agent-python
+        env:
+          VOOM_AGENT_API_TOKEN: ci-test-token
+        run: python -c "from app.main import app; assert app"
