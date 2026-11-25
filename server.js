@@ -13,8 +13,6 @@ const app = express();
 const PORT = 3000;
 
 // Parse JSON request bodies
-app.use(express.json({ limit: '64kb' }));
-
 // Fail-closed service authentication: no API route is available without a server-side token.
 const VOOM_API_AUTH_TOKEN = process.env.VOOM_API_AUTH_TOKEN || '';
 const VOOM_ADMIN_TOKEN = process.env.VOOM_ADMIN_TOKEN || '';
@@ -35,6 +33,10 @@ app.use('/api', (req, res, next) => {
   }
   next();
 });
+
+// Authenticate before parsing untrusted request bodies.
+app.use(express.json({ limit: '64kb' }));
+
 app.use('/api/security-status', (req, res, next) => {
   if (!VOOM_ADMIN_TOKEN) {
     return res.status(503).json({ error: 'ADMIN_AUTH_NOT_CONFIGURED' });
