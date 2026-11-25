@@ -38,6 +38,57 @@ def validate_provider_url(base_url: str, allowed_hosts_csv: str = "") -> None:
     raise ValueError("OLLAMA_BASE_URL must target loopback or an explicitly allowlisted HTTPS host")
 
 
+class RequestBodyLimitMiddleware:
+    """Bound actual ASGI request bytes, including chunked requests without Content-Length."""
+
+    def __init__(self, app, max_bytes: int, path: str = "/v1/agent/run"):
+        if max_bytes < 1:
+            raise ValueError("max_bytes must be positive")
+        self.app = app
+        self.max_bytes = max_bytes
+        self.path = path
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") != "POST" or scope.get("path") != self.path:
+            await self.app(scope, receive, send)
+            return
+
+        messages = []
+        total = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            body = message.get("body", b"")
+            total += len(body)
+            if total > self.max_bytes:
+                payload = b'{"detail":"Request body too large"}'
+                await send({
+                    "type": "http.response.start",
+                    "status": 413,
+                    "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(payload)).encode("ascii"))],
+                })
+                await send({"type": "http.response.body", "body": payload, "more_body": False})
+                return
+            messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        index = 0
+
+        async def replay_receive():
+            nonlocal index
+            if index < len(messages):
+                message = messages[index]
+                index += 1
+                return message
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, replay_receive, send)
+
+
 class RateLimiter:
     """Small in-memory fixed-window limiter for a single Dev/Test process."""
 
@@ -52,7 +103,6 @@ class RateLimiter:
     def allow(self, key: str, now: float | None = None) -> bool:
         current = int((time.monotonic() if now is None else now) // self.window_seconds)
         with self._lock:
-            # Bound memory use by dropping expired windows before adding a new key.
             expired = [item for item, (window, _) in self._windows.items() if window < current]
             for item in expired:
                 self._windows.pop(item, None)
