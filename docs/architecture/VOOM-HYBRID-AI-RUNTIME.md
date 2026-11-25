@@ -11,10 +11,13 @@
 - **VOOM Model Gateway:** provider selection, request validation, timeouts, normalized responses, explicit fallback policy, and provider observability.
 - **Existing Node/Express backend:** remains intact during this slice. The new gateway is an isolated module and is not wired into the existing `/api/chat` route yet.
 - **Python Agent Service:** separate internal service using Agents SDK and Ollama's OpenAI-compatible Chat Completions endpoint.
+- **Headless Agent Adapter:** builds a non-interactive Ollama Launch + Claude Code command specification. It does not spawn processes; execution is deferred until an OS-level sandbox is reviewed.
 
 ## Initial implementation
 
 The Node gateway provides an Ollama adapter and a provider router. Fallback is opt-in and only occurs for explicitly retryable provider failures (network/timeout, rate limit, or upstream 5xx). Client-side 4xx errors and malformed provider responses do not trigger fallback. The Python service starts with a single local agent and no tools, handoffs, memory writes, or trading permissions. SDK tracing is disabled by default.
+
+The Headless adapter defaults to Claude Code print mode and `--permission-mode plan`, disables session persistence, validates model and prompt inputs, and requires an explicit workspace path. It returns an argument vector only and never invokes a shell or starts a process.
 
 ## Security and operational constraints
 
@@ -23,7 +26,9 @@ The Node gateway provides an Ollama adapter and a provider router. Fallback is o
 3. Apply authentication, tenant authorization, rate limits, request-size limits, and audit logging before exposing internal endpoints.
 4. Do not pass untrusted model output directly to tools or execution systems.
 5. Human approval must be enforced by the application authorization layer, not by model instructions.
-6. No broker adapters, order tools, live execution, production database changes, deployment, or Main merge are included.
+6. Before enabling Headless process execution, use a disposable unprivileged container with a read-only workspace mount, restricted network egress, minimal environment, resource limits, timeout, and bounded output.
+7. Never enable permission bypass flags. Write access requires separate explicit approval and a disposable branch/worktree.
+8. No broker adapters, order tools, live execution, production database changes, deployment, or Main merge are included.
 
 ## Deferred work / acceptance gates
 
@@ -33,11 +38,12 @@ The Node gateway provides an Ollama adapter and a provider router. Fallback is o
 - Integration tests against a disposable Ollama instance and a mock OpenAI-compatible server.
 - Authentication and tenant isolation between the existing backend and Python service.
 - Python dependency installation/import tests, live Ollama integration, load tests, provider capability matrix, and security review.
+- Headless sandbox implementation and process-level integration tests.
 
 ## Validation status
 
-GitHub Actions run [#43](https://github.com/vutting895/voom-ai-f480ij/actions/runs/45537373472) completed successfully on the feature branch:
+GitHub Actions run [#45](https://github.com/vutting895/voom-ai-f480ij/actions/runs/45537444824) completed successfully on the previous feature-branch commit:
 - Node 22: `npm install --ignore-scripts`, `npm test`, and `npm run build` passed.
 - Python 3.12: `python -m compileall -q services/agent-python/app` passed.
 
-The Python dependencies were not installed by this workflow, so this is syntax validation only—not proof that the Agents SDK service imports or runs. Live Ollama inference has not been tested. Do not treat this slice as production-ready.
+The Headless command-builder tests are newly added and await the next CI run. Python dependencies were not installed by the workflow, so this remains syntax validation only—not proof that the Agents SDK service imports or runs. Live Ollama inference has not been tested. Do not treat this slice as production-ready.
