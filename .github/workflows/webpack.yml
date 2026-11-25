@@ -29,14 +29,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Resolve and generate a hash-locked Python dependency file
+      - name: Verify committed Python dependency pins
         working-directory: services/agent-python
         run: |
           python -m pip install pip-tools==7.7.0
-          pip-compile --resolver=backtracking --generate-hashes --output-file requirements.lock requirements.txt
-      - name: Install hash-locked Python service dependencies
+          pip-compile --resolver=backtracking --no-emit-hashes --output-file=/tmp/requirements.generated.lock requirements.txt
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          def package_pins(path):
+              pins = []
+              for line in Path(path).read_text().splitlines():
+                  if not line or line.startswith("#") or line.startswith(" "):
+                      continue
+                  match = re.match(r"^([A-Za-z0-9_.-]+(?:\\[[^]]+\\])?==[^\\s;]+)", line)
+                  if match:
+                      pins.append(match.group(1).lower())
+              return sorted(pins)
+
+          committed = package_pins("requirements.lock")
+          generated = package_pins("/tmp/requirements.generated.lock")
+          if committed != generated:
+              print("Committed dependency pins are stale.")
+              print("Missing or changed:", sorted(set(generated) - set(committed)))
+              print("Unexpected:", sorted(set(committed) - set(generated)))
+              raise SystemExit(1)
+          PY
+      - name: Install pinned Python service dependencies
         working-directory: services/agent-python
-        run: python -m pip install --require-hashes -r requirements.lock
+        run: python -m pip install -r requirements.lock
       - name: Compile Python service
         run: python -m compileall -q services/agent-python/app
       - name: Run Python service tests
