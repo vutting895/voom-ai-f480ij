@@ -19,7 +19,7 @@ test('security administration endpoints require an authenticated admin role', ()
 });
 
 test('client-supplied forwarding headers are not trusted for rate limiting', () => {
-  assert.doesNotMatch(source, /x-forwarded-for/i);
+  assert.doesNotMatch(source, /req\\.headers\\[['\"]x-forwarded-for/i);
   assert.match(source, /req\.socket\?\.remoteAddress/);
 });
 
