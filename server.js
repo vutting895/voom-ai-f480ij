@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import { streamText, tool, generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
+import { createSupabaseAdminAuth } from './src/security/supabase-admin-auth.js';
+import { safeExternalGet } from './src/security/safe-external-fetch.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +15,9 @@ const PORT = 3000;
 
 // Parse JSON request bodies
 app.use(express.json());
+
+// Fail closed: Supabase Auth verifies the bearer token and app_metadata.role authorizes admins.
+app.use('/api/security-status', createSupabaseAdminAuth());
 
 // --- VOOM GUARD: AUTOMATED SECURITY & INTRUSION PREVENTION SYSTEM ---
 let activeProtection = true;
@@ -445,14 +450,29 @@ app.post('/api/chat', async (req, res) => {
               return { error: 'ไม่พบแหล่งข้อมูลที่ระบุ', success: false };
             }
 
-            const res = await fetch(url);
-            if (res.ok) {
-              const data = await res.json();
-              return { source, url, data, success: true };
-            } else {
-              const text = await res.text();
-              return { source, url, data: text.slice(0, 500), success: true, warning: 'API return non-JSON or status ' + res.status };
+            const builtInHosts = {
+              crypto: ['api.coindesk.com'],
+              joke: ['official-joke-api.appspot.com'],
+              weather: ['wttr.in']
+            };
+            const customHosts = (process.env.VOOM_CUSTOM_API_HOSTS || '')
+              .split(',')
+              .map(host => host.trim().toLowerCase())
+              .filter(Boolean);
+            const allowedHosts = source === 'custom' ? customHosts : builtInHosts[source];
+            if (!allowedHosts || allowedHosts.length === 0) {
+              return { error: 'Custom API is disabled until VOOM_CUSTOM_API_HOSTS is configured', success: false };
             }
+
+            const response = await safeExternalGet(url, { allowedHosts });
+            const responseText = response.body.toString('utf8');
+            let data;
+            try { data = JSON.parse(responseText); }
+            catch { data = responseText.slice(0, 500); }
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+              return { source, data, success: true };
+            }
+            return { source, data, success: false, warning: 'External API returned HTTP ' + response.statusCode };
           } catch (error) {
             return { error: error.message, success: false };
           }
