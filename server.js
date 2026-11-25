@@ -1,9 +1,11 @@
 import express from 'express';
 import path from 'path';
+import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { streamText, tool, generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,8 +13,72 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-// Parse JSON request bodies
-app.use(express.json());
+// Supabase Auth is the identity authority for every API request.
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const VOOM_ADMIN_TOKEN = process.env.VOOM_ADMIN_TOKEN || '';
+function constantTimeTokenMatch(expected, supplied) {
+  if (!expected || !supplied) return false;
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  const suppliedBuffer = Buffer.from(supplied, 'utf8');
+  return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
+const supabaseAuth = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    })
+  : null;
+
+function extractBearerToken(req) {
+  const authorization = req.get('authorization') || '';
+  return authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+}
+
+async function verifySupabaseAccessToken(authClient, accessToken) {
+  try {
+    const { data, error } = await authClient.auth.getUser(accessToken);
+    if (error) {
+      const rejectedToken = error.status === 401 || error.status === 403;
+      return { error: rejectedToken ? 'UNAUTHORIZED' : 'AUTH_PROVIDER_UNAVAILABLE', status: rejectedToken ? 401 : 503 };
+    }
+    if (!data?.user?.id) return { error: 'UNAUTHORIZED', status: 401 };
+    return { userId: data.user.id };
+  } catch {
+    return { error: 'AUTH_PROVIDER_UNAVAILABLE', status: 503 };
+  }
+}
+
+function createApiAuthMiddleware(authClient) {
+  return async function authenticateApiRequest(req, res, next) {
+    if (!authClient) {
+      return res.status(503).json({ error: 'SUPABASE_AUTH_NOT_CONFIGURED' });
+    }
+    const accessToken = extractBearerToken(req);
+    if (!accessToken) return res.status(401).json({ error: 'UNAUTHORIZED' });
+
+    const identity = await verifySupabaseAccessToken(authClient, accessToken);
+    if (identity.error) return res.status(identity.status).json({ error: identity.error });
+
+    // Identity comes only from the verified Supabase response.
+    req.user = Object.freeze({ id: identity.userId });
+    next();
+  };
+}
+
+app.use('/api', createApiAuthMiddleware(supabaseAuth));
+
+// Authenticate before parsing untrusted request bodies.
+app.use(express.json({ limit: '64kb' }));
+
+app.use('/api/security-status', (req, res, next) => {
+  if (!VOOM_ADMIN_TOKEN) {
+    return res.status(503).json({ error: 'ADMIN_AUTH_NOT_CONFIGURED' });
+  }
+  if (!constantTimeTokenMatch(VOOM_ADMIN_TOKEN, req.get('x-voom-admin-token') || '')) {
+    return res.status(403).json({ error: 'ADMIN_FORBIDDEN' });
+  }
+  next();
+});
 
 // --- VOOM GUARD: AUTOMATED SECURITY & INTRUSION PREVENTION SYSTEM ---
 let activeProtection = true;
@@ -53,11 +119,8 @@ securityLogs.push({
 });
 
 function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  return req.ip || req.connection?.remoteAddress || '127.0.0.1';
+  // Do not trust caller-controlled X-Forwarded-For without an explicit trusted-proxy policy.
+  return req.socket?.remoteAddress || req.ip || 'unknown';
 }
 
 function analyzePayload(body) {
@@ -320,9 +383,13 @@ app.post('/api/security-status', (req, res) => {
   });
 });
 
+app.get('/api/auth/me', (req, res) => {
+  res.json({ userId: req.user.id, authenticated: true });
+});
+
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, context, searchEnabled, temperature, persona, customPersonaText, maxSteps, customApiUrl, autoMemoryEnabled } = req.body;
+    const { messages, context, searchEnabled, temperature, persona, customPersonaText, maxSteps, autoMemoryEnabled } = req.body;
     const isAutoMemoryOn = autoMemoryEnabled !== false;
 
     // Check if API Key exists
@@ -427,10 +494,9 @@ app.post('/api/chat', async (req, res) => {
       call_external_api: tool({
         description: 'ดึงข้อมูลสดหรือผลลัพธ์แบบเรียลไทม์จากระบบ API/Webhook ภายนอกที่กำหนดไว้ (เช่น ราคาคริปโต Bitcoin, มุกตลก, สภาพอากาศ, หรือ URL อื่นๆ ที่ต้องการ)',
         parameters: z.object({
-          source: z.enum(['crypto', 'joke', 'weather', 'custom']).describe('แหล่งข้อมูลที่ต้องการดึง: crypto (ราคาเหรียญบิทคอยน์), joke (มุกตลกสนุกๆ), weather (สภาพอากาศในกรุงเทพฯ), หรือ custom (API พิเศษอื่นๆ)'),
-          customUrl: z.string().optional().describe('URL ปลายทางในกรณีที่เลือกดึงข้อมูลแบบ custom (หากมี)')
+          source: z.enum(['crypto', 'joke', 'weather']).describe('แหล่งข้อมูลที่อนุญาต: crypto, joke หรือ weather')
         }),
-        execute: async ({ source, customUrl }) => {
+        execute: async ({ source }) => {
           try {
             let url = '';
             if (source === 'crypto') {
@@ -439,8 +505,6 @@ app.post('/api/chat', async (req, res) => {
               url = 'https://official-joke-api.appspot.com/random_joke';
             } else if (source === 'weather') {
               url = 'https://wttr.in/Bangkok?format=j1';
-            } else if (source === 'custom') {
-              url = customUrl || customApiUrl || 'https://api.ipify.org?format=json';
             } else {
               return { error: 'ไม่พบแหล่งข้อมูลที่ระบุ', success: false };
             }

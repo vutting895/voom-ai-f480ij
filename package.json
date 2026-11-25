@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "echo 'No build required for static Express server'",
-    "lint": "echo 'No linting required'",
+    "build": "node --check server.js",
+    "lint": "node --check server.js",
+    "test": "node --test",
     "start": "node server.js"
   },
   "dependencies": {
