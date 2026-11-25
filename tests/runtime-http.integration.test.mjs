@@ -7,6 +7,8 @@ import { setTimeout as delay } from "node:timers/promises";
 const baseUrl = "http://127.0.0.1:3000";
 const userA = "00000000-0000-4000-8000-00000000000a";
 const userB = "00000000-0000-4000-8000-00000000000b";
+const tokenA = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMGEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIn0.signatureA";
+const tokenB = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMGIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIn0.signatureB";
 let server;
 let authServer;
 
@@ -29,8 +31,8 @@ before(async () => {
       return;
     }
     const users = {
-      "user-a-access-token": { id: userA, aud: "authenticated", role: "authenticated" },
-      "user-b-access-token": { id: userB, aud: "authenticated", role: "authenticated" },
+      [tokenA]: { id: userA, aud: "authenticated", role: "authenticated" },
+      [tokenB]: { id: userB, aud: "authenticated", role: "authenticated" },
     };
     const user = users[token];
     res.writeHead(user ? 200 : 401, { "content-type": "application/json" });
@@ -43,7 +45,7 @@ before(async () => {
     env: {
       ...process.env,
       SUPABASE_URL: "http://127.0.0.1:3001",
-      SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
+      SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.signature",
       VOOM_ADMIN_TOKEN: "integration-test-admin-token",
     },
     stdio: ["ignore", "ignore", "pipe"],
@@ -103,14 +105,14 @@ test("API rejects oversized unauthenticated bodies before JSON parsing", async (
 });
 
 test("verified Supabase token resolves to its own immutable user identity", async () => {
-  const response = await apiRequest({ token: "user-a-access-token" });
+  const response = await apiRequest({ token: tokenA });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { userId: userA, authenticated: true });
 });
 
 test("caller-supplied user ID query cannot override the verified Supabase identity", async () => {
   const response = await apiRequest({
-    token: "user-a-access-token",
+    token: tokenA,
     path: `/api/auth/me?userId=${userB}`,
   });
   assert.equal(response.status, 200);
@@ -118,7 +120,7 @@ test("caller-supplied user ID query cannot override the verified Supabase identi
 });
 
 test("different Supabase token resolves to a different user identity", async () => {
-  const response = await apiRequest({ token: "user-b-access-token" });
+  const response = await apiRequest({ token: tokenB });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { userId: userB, authenticated: true });
 });
@@ -129,13 +131,13 @@ test("legacy shared service token is not accepted as user identity", async () =>
 });
 
 test("security administration still requires its separate admin token", async () => {
-  const response = await apiRequest({ token: "user-a-access-token", path: "/api/security-status" });
+  const response = await apiRequest({ token: tokenA, path: "/api/security-status" });
   assert.equal(response.status, 403);
 });
 
 test("verified user plus admin token can read simulated security status", async () => {
   const response = await apiRequest({
-    token: "user-a-access-token",
+    token: tokenA,
     path: "/api/security-status",
     headers: { "x-voom-admin-token": "integration-test-admin-token" },
   });
