@@ -1,10 +1,10 @@
 import express from 'express';
 import path from 'path';
-import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { streamText, tool, generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,26 +12,42 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-// Parse JSON request bodies
-// Fail-closed service authentication: no API route is available without a server-side token.
-const VOOM_API_AUTH_TOKEN = process.env.VOOM_API_AUTH_TOKEN || '';
+// Supabase Auth is the identity authority for every API request.
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const VOOM_ADMIN_TOKEN = process.env.VOOM_ADMIN_TOKEN || '';
-function constantTimeTokenMatch(expected, supplied) {
-  if (!expected || !supplied) return false;
-  const expectedBuffer = Buffer.from(expected, 'utf8');
-  const suppliedBuffer = Buffer.from(supplied, 'utf8');
-  return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer);
-}
-app.use('/api', (req, res, next) => {
-  if (!VOOM_API_AUTH_TOKEN) {
-    return res.status(503).json({ error: 'API_AUTH_NOT_CONFIGURED', message: 'API access is disabled until VOOM_API_AUTH_TOKEN is configured.' });
+const supabaseAuth = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    })
+  : null;
+
+app.use('/api', async (req, res, next) => {
+  if (!supabaseAuth) {
+    return res.status(503).json({ error: 'SUPABASE_AUTH_NOT_CONFIGURED' });
   }
   const authorization = req.get('authorization') || '';
-  const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  if (!constantTimeTokenMatch(VOOM_API_AUTH_TOKEN, supplied)) {
+  const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  if (!accessToken) {
     return res.status(401).json({ error: 'UNAUTHORIZED' });
   }
-  next();
+  try {
+    const { data, error } = await supabaseAuth.auth.getUser(accessToken);
+    if (error) {
+      const rejectedToken = error.name === 'AuthApiError' || error.status === 401 || error.status === 403;
+      return res.status(rejectedToken ? 401 : 503).json({
+        error: rejectedToken ? 'UNAUTHORIZED' : 'AUTH_PROVIDER_UNAVAILABLE'
+      });
+    }
+    if (!data?.user?.id) {
+      return res.status(401).json({ error: 'UNAUTHORIZED' });
+    }
+    // Identity is derived only from Supabase's verified user response, never from request JSON.
+    req.user = Object.freeze({ id: data.user.id });
+    next();
+  } catch {
+    return res.status(503).json({ error: 'AUTH_PROVIDER_UNAVAILABLE' });
+  }
 });
 
 // Authenticate before parsing untrusted request bodies.
@@ -348,6 +364,10 @@ app.post('/api/security-status', (req, res) => {
     securityLogs: securityLogs.slice(-100).reverse(), // newest first
     threatLevel
   });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  res.json({ userId: req.user.id, authenticated: true });
 });
 
 app.post('/api/chat', async (req, res) => {
