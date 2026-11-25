@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { streamText, tool, generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -16,6 +17,12 @@ const PORT = 3000;
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const VOOM_ADMIN_TOKEN = process.env.VOOM_ADMIN_TOKEN || '';
+function constantTimeTokenMatch(expected, supplied) {
+  if (!expected || !supplied) return false;
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  const suppliedBuffer = Buffer.from(supplied, 'utf8');
+  return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
 const supabaseAuth = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
