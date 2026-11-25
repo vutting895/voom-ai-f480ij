@@ -1,5 +1,6 @@
-import asyncio
 import unittest
+
+import httpx
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
