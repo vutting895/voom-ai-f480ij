@@ -29,16 +29,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Python service dependencies
+      - name: Install pinned Python service dependencies
         working-directory: services/agent-python
         run: python -m pip install -r requirements.txt
       - name: Compile Python service
         run: python -m compileall -q services/agent-python/app
-      - name: Run authentication unit tests
+      - name: Run Python service tests
         working-directory: services/agent-python
+        env:
+          VOOM_AGENT_API_TOKEN: ci-test-token-ci-test-token-ci-test-token-123456
         run: python -m unittest discover -s tests -v
       - name: Import application
         working-directory: services/agent-python
         env:
-          VOOM_AGENT_API_TOKEN: ci-test-token
+          VOOM_AGENT_API_TOKEN: ci-test-token-ci-test-token-ci-test-token-123456
         run: python -c "from app.main import app; assert app"
+      - name: Audit resolved Python dependencies
+        working-directory: services/agent-python
+        run: |
+          python -m pip install pip-audit
+          pip-audit -r requirements.txt
+      - name: Capture resolved dependency inventory
+        working-directory: services/agent-python
+        run: python -m pip freeze > python-dependencies-resolved.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-python-dependency-inventory
+          path: services/agent-python/python-dependencies-resolved.txt
+          if-no-files-found: error
