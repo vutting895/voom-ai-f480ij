@@ -627,6 +627,12 @@ app.get('*all', (req, res) => {
   res.sendFile(path.join(__dirname, 'voom-ai.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
-});
+export { app };
+
+// Start the HTTP listener only when this file is the process entry point.
+// Importing the app in tests must never open a network listener.
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  app.listen(Number(process.env.PORT) || PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${Number(process.env.PORT) || PORT}`);
+  });
+}
