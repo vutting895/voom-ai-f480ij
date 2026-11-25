@@ -1,11 +1,14 @@
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export class ProviderError extends Error {
-  constructor(message, { provider, status, cause } = {}) {
+  constructor(message, { provider, status, cause, retryable } = {}) {
     super(message, { cause });
     this.name = "ProviderError";
     this.provider = provider;
     this.status = status;
+    this.retryable = retryable ?? (
+      status == null || status === 408 || status === 429 || status >= 500
+    );
   }
 }
 
@@ -62,6 +65,7 @@ export function createOpenAICompatibleProvider({
         if (typeof content !== "string") {
           throw new ProviderError(`${name} returned an invalid chat completion`, {
             provider: name,
+            retryable: false,
           });
         }
 
