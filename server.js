@@ -5,6 +5,7 @@ import { streamText, tool, generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -12,7 +13,48 @@ const app = express();
 const PORT = 3000;
 
 // Parse JSON request bodies
-app.use(express.json());
+app.use(express.json({ limit: '16kb' }));
+
+// Authentication is fail-closed. Supabase anon key is public configuration;
+// the caller's access token is validated server-side with Supabase Auth.
+async function authenticateSupabaseUser(req, res, next) {
+  const authorization = req.get('authorization') || '';
+  const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res.status(503).json({ error: 'AUTH_NOT_CONFIGURED', message: 'Authentication is not configured; API access is disabled.' });
+  }
+  if (!tokenMatch) {
+    return res.status(401).json({ error: 'UNAUTHENTICATED' });
+  }
+
+  try {
+    const authUrl = supabaseUrl.replace(/\/+$/, '') + '/auth/v1/user';
+    const authResponse = await fetch(authUrl, {
+      method: 'GET',
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${tokenMatch[1]}` },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!authResponse.ok) return res.status(401).json({ error: 'INVALID_SESSION' });
+    const user = await authResponse.json();
+    if (!user || typeof user.id !== 'string' || !user.id) return res.status(401).json({ error: 'INVALID_SESSION' });
+    req.authUser = user;
+    return next();
+  } catch {
+    return res.status(503).json({ error: 'AUTH_PROVIDER_UNAVAILABLE' });
+  }
+}
+
+function requireAdmin(req, res, next) {
+  const appMetadata = req.authUser?.app_metadata || {};
+  const roles = Array.isArray(appMetadata.roles) ? appMetadata.roles : [];
+  if (appMetadata.role !== 'admin' && !roles.includes('admin')) {
+    return res.status(403).json({ error: 'FORBIDDEN' });
+  }
+  return next();
+}
 
 // --- VOOM GUARD: AUTOMATED SECURITY & INTRUSION PREVENTION SYSTEM ---
 let activeProtection = true;
@@ -53,11 +95,8 @@ securityLogs.push({
 });
 
 function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  return req.ip || req.connection?.remoteAddress || '127.0.0.1';
+  // Do not trust client-supplied X-Forwarded-For. Express proxy trust is not enabled.
+  return req.socket?.remoteAddress || req.ip || 'unknown';
 }
 
 function analyzePayload(body) {
@@ -207,7 +246,7 @@ app.use((req, res, next) => {
 });
 
 // Security Status & Administration Endpoints
-app.get('/api/security-status', (req, res) => {
+app.get('/api/security-status', authenticateSupabaseUser, requireAdmin, (req, res) => {
   // Calculate Threat Level dynamically based on recent active banned IPs
   let threatLevel = "LOW";
   const activeBanCount = Object.keys(bannedIPs).length;
@@ -234,7 +273,7 @@ app.get('/api/security-status', (req, res) => {
   });
 });
 
-app.post('/api/security-status', (req, res) => {
+app.post('/api/security-status', authenticateSupabaseUser, requireAdmin, (req, res) => {
   const { 
     toggleProtection, 
     updateLimits, 
@@ -320,7 +359,7 @@ app.post('/api/security-status', (req, res) => {
   });
 });
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', authenticateSupabaseUser, async (req, res) => {
   try {
     const { messages, context, searchEnabled, temperature, persona, customPersonaText, maxSteps, customApiUrl, autoMemoryEnabled } = req.body;
     const isAutoMemoryOn = autoMemoryEnabled !== false;
@@ -440,7 +479,7 @@ app.post('/api/chat', async (req, res) => {
             } else if (source === 'weather') {
               url = 'https://wttr.in/Bangkok?format=j1';
             } else if (source === 'custom') {
-              url = customUrl || customApiUrl || 'https://api.ipify.org?format=json';
+              return { error: 'CUSTOM_API_DISABLED', success: false };
             } else {
               return { error: 'ไม่พบแหล่งข้อมูลที่ระบุ', success: false };
             }
@@ -477,12 +516,14 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
+    const safeTemperature = typeof temperature === 'number' && Number.isFinite(temperature) ? Math.max(0, Math.min(1, temperature)) : 0.7;
+    const safeMaxSteps = typeof maxSteps === 'number' && Number.isInteger(maxSteps) ? Math.max(1, Math.min(5, maxSteps)) : 5;
     const result = streamText({
       model: googleProvider('gemini-3.6-flash', {
         useSearchGrounding: !!searchEnabled,
       }),
-      temperature: typeof temperature === 'number' ? temperature : 0.7,
-      maxSteps: typeof maxSteps === 'number' ? maxSteps : 5,
+      temperature: safeTemperature,
+      maxSteps: safeMaxSteps,
       system: systemPrompt,
       messages: messages,
       tools: activeTools
@@ -534,7 +575,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Gemini API Connectivity Health Check Endpoint
-app.get('/api/health-check', async (req, res) => {
+app.get('/api/health-check', authenticateSupabaseUser, async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (!apiKey) {
@@ -586,6 +627,12 @@ app.get('*all', (req, res) => {
   res.sendFile(path.join(__dirname, 'voom-ai.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
-});
+export { app };
+
+// Start the HTTP listener only when this file is the process entry point.
+// Importing the app in tests must never open a network listener.
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  app.listen(Number(process.env.PORT) || PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${Number(process.env.PORT) || PORT}`);
+  });
+}

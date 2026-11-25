@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "echo 'No build required for static Express server'",
+    "build": "node --check server.js",
     "lint": "echo 'No linting required'",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.19",
