@@ -19,7 +19,13 @@ export class ModelRouter {
     try {
       return await primary.chat(input);
     } catch (primaryError) {
-      if (!this.fallbackProvider || selected === this.fallbackProvider) {
+      // Fallback is reserved for explicitly retryable provider failures
+      // (network/timeout, rate limit, or upstream server errors).
+      if (
+        !this.fallbackProvider ||
+        selected === this.fallbackProvider ||
+        primaryError?.retryable !== true
+      ) {
         throw primaryError;
       }
       const fallback = this.providers.get(this.fallbackProvider);
