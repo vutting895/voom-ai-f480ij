@@ -1,12 +1,17 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import httpx
 from fastapi.testclient import TestClient
 
 from app import main
-from app.security import RateLimiter, bearer_token_matches, validate_provider_url
+from app.security import (
+    RateLimiter,
+    RequestBodyLimitMiddleware,
+    bearer_token_matches,
+    validate_provider_url,
+)
 
 
 class BearerTokenTests(unittest.TestCase):
@@ -47,6 +52,58 @@ class ProviderUrlTests(unittest.TestCase):
             validate_provider_url("http://user:pass@127.0.0.1:11434/v1")
         with self.assertRaises(ValueError):
             validate_provider_url("http://127.0.0.1:11434/v1?target=elsewhere")
+
+
+class RequestBodyLimitMiddlewareTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_chunked_body_without_content_length(self):
+        chunks = [
+            {"type": "http.request", "body": b"1234", "more_body": True},
+            {"type": "http.request", "body": b"5678", "more_body": False},
+        ]
+        async def receive():
+            return chunks.pop(0)
+
+        called = False
+        async def downstream(scope, receive, send):
+            nonlocal called
+            called = True
+
+        sent = []
+        async def send(message):
+            sent.append(message)
+
+        middleware = RequestBodyLimitMiddleware(downstream, max_bytes=6)
+        await middleware(
+            {"type": "http", "method": "POST", "path": "/v1/agent/run", "headers": []},
+            receive,
+            send,
+        )
+        self.assertFalse(called)
+        self.assertEqual(sent[0]["status"], 413)
+
+    async def test_replays_body_when_within_limit(self):
+        chunks = [
+            {"type": "http.request", "body": b"abc", "more_body": True},
+            {"type": "http.request", "body": b"def", "more_body": False},
+        ]
+        async def receive():
+            return chunks.pop(0)
+
+        received = []
+        async def downstream(scope, wrapped_receive, send):
+            received.append(await wrapped_receive())
+            received.append(await wrapped_receive())
+
+        async def send(message):
+            pass
+
+        middleware = RequestBodyLimitMiddleware(downstream, max_bytes=6)
+        await middleware(
+            {"type": "http", "method": "POST", "path": "/v1/agent/run", "headers": []},
+            receive,
+            send,
+        )
+        self.assertEqual(b"".join(item["body"] for item in received), b"abcdef")
 
 
 class RateLimiterTests(unittest.TestCase):
