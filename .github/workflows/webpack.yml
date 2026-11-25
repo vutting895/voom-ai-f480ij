@@ -2,7 +2,7 @@ name: VOOM AI CI
 
 on:
   push:
-    branches: [main, feature/hybrid-ai-runtime-ollama-agents]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
