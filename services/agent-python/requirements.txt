@@ -1,4 +1,7 @@
-fastapi>=0.115,<1
-uvicorn[standard]>=0.30,<1
-openai-agents>=0.2,<1
-pydantic>=2.8,<3
+# Direct runtime dependencies are pinned for repeatable Dev/Test installs.
+# Transitive dependency locking and hashes remain a separate release gate.
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+openai-agents==0.26.0
+pydantic==2.14.4
+httpx==0.28.1
