@@ -50,7 +50,7 @@ test("rejects paths outside the allowlist and relative paths", () => {
 test("rejects malformed roots, empty allowlists, and NUL bytes", () => {
   assert.throws(() => resolveWorkspaceWithinAllowedRoots({
     workspace: "/tmp/work", allowedRoots: [],
-  }), /at least one/);
+  }), /at least one/i);
   assert.throws(() => resolveWorkspaceWithinAllowedRoots({
     workspace: "/tmp/work", allowedRoots: ["relative-root"],
   }), /absolute/);
