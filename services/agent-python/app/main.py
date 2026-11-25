@@ -8,7 +8,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.security import RateLimiter, bearer_token_matches, validate_provider_url
+from app.security import (
+    RateLimiter,
+    RequestBodyLimitMiddleware,
+    bearer_token_matches,
+    validate_provider_url,
+)
 
 APP_ENV = os.getenv("APP_ENV", "development")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
@@ -22,9 +27,7 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AGENT_RATE_LIMIT_WINDOW_SECONDS", "60
 logger = logging.getLogger("voom.agent")
 rate_limiter = RateLimiter(RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECONDS)
 
-# The provider endpoint is trusted configuration, never a request parameter.
 validate_provider_url(OLLAMA_BASE_URL, os.getenv("OLLAMA_ALLOWED_HOSTS", ""))
-# Do not export conversation traces to a third party by default.
 set_tracing_disabled(True)
 
 client = AsyncOpenAI(
@@ -45,6 +48,7 @@ assistant = Agent(
 )
 
 app = FastAPI(title="VOOM Agent Service", version="0.2.0")
+app.add_middleware(RequestBodyLimitMiddleware, max_bytes=MAX_BODY_BYTES)
 
 
 class RunRequest(BaseModel):
@@ -86,7 +90,6 @@ async def protect_agent_endpoint(request: Request, call_next):
             except ValueError:
                 return _request_id_response(400, "Invalid Content-Length", request_id)
 
-        # This is a per-process Dev/Test limiter, not a distributed production control.
         client_ip = request.client.host if request.client else "unknown"
         if not rate_limiter.allow(client_ip):
             logger.warning("agent_rate_limited request_id=%s", request_id)
@@ -115,7 +118,7 @@ async def run_agent(payload: RunRequest, request: Request):
     if payload.task == "analysis":
         task_input = (
             "Analyze the following request carefully. Separate facts from assumptions "
-            "and identify material risks.\n\n" + payload.input
+            "and identify material risks.\\n\\n" + payload.input
         )
 
     try:
@@ -124,7 +127,6 @@ async def run_agent(payload: RunRequest, request: Request):
         logger.info("agent_request_completed request_id=%s task=%s", request_id, payload.task)
         return RunResponse(output=output)
     except Exception as exc:
-        # Do not log prompt, bearer token, or provider response body.
         logger.error(
             "agent_provider_error request_id=%s error_type=%s",
             request_id,
