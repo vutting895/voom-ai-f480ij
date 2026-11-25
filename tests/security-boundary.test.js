@@ -19,7 +19,7 @@ test('security administration endpoints require an authenticated admin role', ()
 });
 
 test('client-supplied forwarding headers are not trusted for rate limiting', () => {
-  assert.doesNotMatch(source, /req\\.headers\\[['\"]x-forwarded-for/i);
+  assert.doesNotMatch(source, /req\.headers\[['"]x-forwarded-for/i);
   assert.match(source, /req\.socket\?\.remoteAddress/);
 });
 
@@ -31,5 +31,5 @@ test('arbitrary custom API URLs are disabled to prevent SSRF', () => {
 test('chat resource controls are bounded', () => {
   assert.match(source, /express\.json\(\{\s*limit:\s*'16kb'\s*\}\)/);
   assert.match(source, /Math\.min\(5, maxSteps\)/);
-  assert.match(source, /Math\.min\(1, Math\.max\(0/);
+  assert.match(source, /Math\.max\(0, Math\.min\(1/);
 });
