@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { streamText, tool, generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
+import { createSupabaseAdminAuth } from './src/security/supabase-admin-auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +14,9 @@ const PORT = 3000;
 
 // Parse JSON request bodies
 app.use(express.json());
+
+// Fail closed: Supabase Auth verifies the bearer token and app_metadata.role authorizes admins.
+app.use('/api/security-status', createSupabaseAdminAuth());
 
 // --- VOOM GUARD: AUTOMATED SECURITY & INTRUSION PREVENTION SYSTEM ---
 let activeProtection = true;
