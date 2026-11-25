@@ -2,13 +2,16 @@ import os
 from typing import Literal
 
 from agents import Agent, Runner, AsyncOpenAI, OpenAIChatCompletionsModel, set_tracing_disabled
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
+
+from app.security import bearer_token_matches
 
 APP_ENV = os.getenv("APP_ENV", "development")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
 MAX_INPUT_CHARS = int(os.getenv("AGENT_MAX_INPUT_CHARS", "12000"))
+AGENT_API_TOKEN = os.getenv("VOOM_AGENT_API_TOKEN", "")
 
 # Do not export conversation traces to a third party by default.
 set_tracing_disabled(True)
@@ -50,7 +53,15 @@ async def health():
 
 
 @app.post("/v1/agent/run", response_model=RunResponse)
-async def run_agent(request: RunRequest):
+async def run_agent(
+    request: RunRequest,
+    authorization: str | None = Header(default=None),
+):
+    if not AGENT_API_TOKEN:
+        raise HTTPException(status_code=503, detail="Agent API authentication is not configured")
+    if not bearer_token_matches(AGENT_API_TOKEN, authorization):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         result = await Runner.run(assistant, request.input)
         return RunResponse(output=str(result.final_output or ""))
