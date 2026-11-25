@@ -1,6 +1,8 @@
 name: Hybrid AI Runtime Tests
 
 on:
+  push:
+    branches: [feature/hybrid-ai-runtime-ollama-agents]
   pull_request:
     branches: [main]
     paths:
