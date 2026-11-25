@@ -29,33 +29,43 @@ const supabaseAuth = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
     })
   : null;
 
-app.use('/api', async (req, res, next) => {
-  if (!supabaseAuth) {
-    return res.status(503).json({ error: 'SUPABASE_AUTH_NOT_CONFIGURED' });
-  }
+function extractBearerToken(req) {
   const authorization = req.get('authorization') || '';
-  const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-  if (!accessToken) {
-    return res.status(401).json({ error: 'UNAUTHORIZED' });
-  }
+  return authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+}
+
+async function verifySupabaseAccessToken(authClient, accessToken) {
   try {
-    const { data, error } = await supabaseAuth.auth.getUser(accessToken);
+    const { data, error } = await authClient.auth.getUser(accessToken);
     if (error) {
       const rejectedToken = error.name === 'AuthApiError' || error.status === 401 || error.status === 403;
-      return res.status(rejectedToken ? 401 : 503).json({
-        error: rejectedToken ? 'UNAUTHORIZED' : 'AUTH_PROVIDER_UNAVAILABLE'
-      });
+      return { error: rejectedToken ? 'UNAUTHORIZED' : 'AUTH_PROVIDER_UNAVAILABLE', status: rejectedToken ? 401 : 503 };
     }
-    if (!data?.user?.id) {
-      return res.status(401).json({ error: 'UNAUTHORIZED' });
-    }
-    // Identity is derived only from Supabase's verified user response, never from request JSON.
-    req.user = Object.freeze({ id: data.user.id });
-    next();
+    if (!data?.user?.id) return { error: 'UNAUTHORIZED', status: 401 };
+    return { userId: data.user.id };
   } catch {
-    return res.status(503).json({ error: 'AUTH_PROVIDER_UNAVAILABLE' });
+    return { error: 'AUTH_PROVIDER_UNAVAILABLE', status: 503 };
   }
-});
+}
+
+function createApiAuthMiddleware(authClient) {
+  return async function authenticateApiRequest(req, res, next) {
+    if (!authClient) {
+      return res.status(503).json({ error: 'SUPABASE_AUTH_NOT_CONFIGURED' });
+    }
+    const accessToken = extractBearerToken(req);
+    if (!accessToken) return res.status(401).json({ error: 'UNAUTHORIZED' });
+
+    const identity = await verifySupabaseAccessToken(authClient, accessToken);
+    if (identity.error) return res.status(identity.status).json({ error: identity.error });
+
+    // Identity comes only from the verified Supabase response.
+    req.user = Object.freeze({ id: identity.userId });
+    next();
+  };
+}
+
+app.use('/api', createApiAuthMiddleware(supabaseAuth));
 
 // Authenticate before parsing untrusted request bodies.
 app.use(express.json({ limit: '64kb' }));
