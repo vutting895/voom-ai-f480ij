@@ -14,7 +14,7 @@
 
 ## Initial implementation
 
-The Node gateway provides an Ollama adapter and a provider router. Fallback is opt-in and must be configured explicitly; it is never silently inferred. The Python service starts with a single local agent and no tools, handoffs, memory writes, or trading permissions. SDK tracing is disabled by default.
+The Node gateway provides an Ollama adapter and a provider router. Fallback is opt-in and only occurs for explicitly retryable provider failures (network/timeout, rate limit, or upstream 5xx). Client-side 4xx errors and malformed provider responses do not trigger fallback. The Python service starts with a single local agent and no tools, handoffs, memory writes, or trading permissions. SDK tracing is disabled by default.
 
 ## Security and operational constraints
 
@@ -32,8 +32,12 @@ The Node gateway provides an Ollama adapter and a provider router. Fallback is o
 - Explicit human-approval workflow and auditable action lifecycle.
 - Integration tests against a disposable Ollama instance and a mock OpenAI-compatible server.
 - Authentication and tenant isolation between the existing backend and Python service.
-- CI execution evidence, load tests, provider capability matrix, and security review.
+- Python dependency installation/import tests, live Ollama integration, load tests, provider capability matrix, and security review.
 
 ## Validation status
 
-Source files and unit tests are added in this development branch. Tests have **not** been executed in a repository runner or against a live Ollama runtime in this change. Do not treat this slice as production-ready.
+GitHub Actions run [#43](https://github.com/vutting895/voom-ai-f480ij/actions/runs/45537373472) completed successfully on the feature branch:
+- Node 22: `npm install --ignore-scripts`, `npm test`, and `npm run build` passed.
+- Python 3.12: `python -m compileall -q services/agent-python/app` passed.
+
+The Python dependencies were not installed by this workflow, so this is syntax validation only—not proof that the Agents SDK service imports or runs. Live Ollama inference has not been tested. Do not treat this slice as production-ready.
