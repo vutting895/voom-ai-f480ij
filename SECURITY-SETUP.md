@@ -4,7 +4,7 @@ The supported Node entrypoint is `server.js`. The legacy `sever.js` RAG server i
 
 ## Required server-side configuration
 
-- `SUPABASE_URL`: URL of the canonical Supabase project used by the client to issue access tokens.
+- `SUPABASE_URL`: URL of the canonical Supabase project used by the client to issue access tokens. For the current VOOM AI ↔ NOVA integration, the canonical project is `https://rovhmjeowracayicbqij.supabase.co` (project ref `rovhmjeowracayicbqij`); do not substitute the legacy `Voom_system` project.
 - `SUPABASE_PUBLISHABLE_KEY`: publishable key for that same project. For legacy projects, `SUPABASE_ANON_KEY` is accepted as a compatibility fallback.
 - `VOOM_ADMIN_TOKEN`: separate server-only token required by the simulated `/api/security-status` administration route.
 
