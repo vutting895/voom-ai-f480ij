@@ -9,6 +9,7 @@ test("API authentication fails closed when the service token is absent", () => {
   assert.match(server, /API_AUTH_NOT_CONFIGURED/);
   assert.match(server, /authorization\.startsWith\('Bearer '\)/);
   assert.match(server, /timingSafeEqual/);
+  assert.ok(server.indexOf("app.use('/api',") < server.indexOf("app.use(express.json({ limit: '64kb' }))"), "authenticate before parsing the body");
 });
 
 test("security administration requires a separate admin token", () => {
