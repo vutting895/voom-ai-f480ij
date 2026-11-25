@@ -17,25 +17,34 @@ ollama launch claude --model qwen3.5 --yes -- -p "Review this repository and rep
 
 ## Current implementation boundary
 
-`buildOllamaClaudeCommand` validates model, prompt length, and an explicit workspace, then returns a structured command specification. It does not spawn a process, access a repository, or run shell commands. This is deliberate: process execution requires a separately reviewed sandbox and OS-level isolation boundary.
+`buildOllamaClaudeCommand` validates the model and prompt, requires an explicit workspace allowlist, and returns a structured command specification. It does not spawn a process, access a repository, or run shell commands.
 
-## Security requirements before execution is enabled
+The workspace check is **lexical path validation only**. It resolves `..` segments and verifies that the resulting path is under one of the supplied absolute roots. It does not resolve symlinks, pin a filesystem object, prevent time-of-check/time-of-use races, or enforce filesystem permissions. It is not a sandbox and must not be treated as one.
 
-1. Run only inside a disposable, unprivileged container or OS sandbox with a read-only workspace mount.
-2. Use a fixed executable path and argument vector; never invoke a shell or interpolate user input into a command string.
-3. Restrict filesystem visibility, network egress, environment variables, CPU, memory, process count, and wall-clock time.
-4. Do not mount credentials, production files, SSH keys, cloud metadata, or broker configuration.
-5. Enforce output-size limits and capture exit code, timeout, stdout, and stderr.
-6. Keep plan/read-only mode as the default. Any write mode requires a separate explicit approval and a disposable branch/worktree.
-7. Never enable `--dangerously-skip-permissions` or bypass permissions.
+## Read-only execution contract — not yet implemented
+
+Any future executor must fail closed unless all of these controls are independently enforced and tested:
+
+1. Use a disposable, unprivileged container or equivalent OS sandbox.
+2. Resolve the workspace with filesystem-aware canonicalization, reject symlinks that escape the approved root, and mount the approved workspace read-only. Avoid check-then-use races by enforcing the boundary at mount time.
+3. Use a fixed executable path and argument vector; never invoke a shell or interpolate user input into a command string.
+4. Restrict filesystem visibility to the minimum required; do not mount host home directories, Docker sockets, credentials, SSH keys, cloud metadata, production files, or broker configuration.
+5. Disable network egress by default. If Ollama must be reached, allow only a narrowly scoped endpoint and block all other destinations.
+6. Use a minimal environment with an explicit environment-variable allowlist.
+7. Enforce CPU, memory, process-count, file-size, wall-clock, stdout, and stderr limits.
+8. Capture exit code, timeout state, bounded stdout/stderr, and an auditable execution ID.
+9. Keep plan/read-only mode as defense in depth. It is not a substitute for OS isolation.
+10. Do not support write mode in this slice. Any future write-enabled mode requires separate explicit approval, disposable branch/worktree isolation, and independent review.
 
 ## Not implemented
 
 - Process spawning or a remote execution service.
+- Filesystem-aware workspace canonicalization or OS-enforced read-only mounts.
+- Network, environment, resource, or process isolation.
 - Automatic repository checkout or branch creation.
 - Write-enabled coding agent.
 - Deployment, merge, production database, broker, or trading access.
 
 ## Validation
 
-Unit tests cover argument construction and input validation. They do not prove Ollama or Claude Code is installed, nor do they prove OS-level sandboxing.
+Unit tests cover argument construction and lexical workspace allowlist validation. They do not prove symlink safety, OS-level sandboxing, Ollama availability, or Claude Code execution. No real process is started by this adapter.

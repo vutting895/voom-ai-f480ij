@@ -1,3 +1,5 @@
+import { resolveWorkspaceWithinAllowedRoots } from "./workspace-policy.js";
+
 const DEFAULT_MAX_PROMPT_LENGTH = 12_000;
 const MODEL_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/;
 
@@ -9,6 +11,7 @@ export function buildOllamaClaudeCommand({
   model,
   prompt,
   workspace,
+  allowedWorkspaceRoots,
   maxPromptLength = DEFAULT_MAX_PROMPT_LENGTH,
 }) {
   if (typeof model !== "string" || !MODEL_PATTERN.test(model)) {
@@ -17,12 +20,14 @@ export function buildOllamaClaudeCommand({
   if (typeof prompt !== "string" || prompt.trim().length === 0) {
     throw new TypeError("A non-empty prompt is required");
   }
-  if (prompt.length > maxPromptLength) {
-    throw new RangeError(`Prompt exceeds ${maxPromptLength} characters`);
+  if (!Number.isInteger(maxPromptLength) || maxPromptLength < 1 || prompt.length > maxPromptLength) {
+    throw new RangeError(`Prompt exceeds the configured ${maxPromptLength} character limit`);
   }
-  if (typeof workspace !== "string" || !workspace.trim()) {
-    throw new TypeError("An explicit workspace path is required");
-  }
+
+  const cwd = resolveWorkspaceWithinAllowedRoots({
+    workspace,
+    allowedRoots: allowedWorkspaceRoots,
+  });
 
   return Object.freeze({
     command: "ollama",
@@ -41,8 +46,9 @@ export function buildOllamaClaudeCommand({
       "--output-format",
       "json",
     ]),
-    cwd: workspace,
+    cwd,
     permissionMode: "plan",
+    workspacePolicy: "lexical-allowlist-only",
     interactive: false,
     executesProcess: false,
   });
