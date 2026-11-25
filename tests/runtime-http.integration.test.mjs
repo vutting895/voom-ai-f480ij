@@ -5,8 +5,16 @@ import { after, before, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 
 const baseUrl = "http://127.0.0.1:3000";
+const userA = "00000000-0000-4000-8000-00000000000a";
+const userB = "00000000-0000-4000-8000-00000000000b";
 let server;
 let authServer;
+
+async function apiRequest({ token, path = "/api/auth/me", method = "GET", headers = {}, body }) {
+  const requestHeaders = { ...headers };
+  if (token) requestHeaders.authorization = `Bearer ${token}`;
+  return fetch(baseUrl + path, { method, headers: requestHeaders, body });
+}
 
 before(async () => {
   authServer = createServer((req, res) => {
@@ -14,15 +22,15 @@ before(async () => {
       res.writeHead(404).end();
       return;
     }
-    const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+    const token = (req.headers.authorization || "").replace(/^Bearer\\s+/i, "");
     if (token === "auth-provider-error-token") {
       res.writeHead(500, { "content-type": "application/json" });
       res.end(JSON.stringify({ message: "Auth service unavailable" }));
       return;
     }
     const users = {
-      "user-a-access-token": { id: "00000000-0000-4000-8000-00000000000a", aud: "authenticated", role: "authenticated" },
-      "user-b-access-token": { id: "00000000-0000-4000-8000-00000000000b", aud: "authenticated", role: "authenticated" },
+      "user-a-access-token": { id: userA, aud: "authenticated", role: "authenticated" },
+      "user-b-access-token": { id: userB, aud: "authenticated", role: "authenticated" },
     };
     const user = users[token];
     res.writeHead(user ? 200 : 401, { "content-type": "application/json" });
@@ -45,7 +53,7 @@ before(async () => {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     if (server.exitCode !== null) throw new Error("Runtime server exited before startup.");
     try {
-      const response = await fetch(baseUrl + "/api/auth/me");
+      const response = await apiRequest({});
       if (response.status === 401) {
         ready = true;
         break;
@@ -68,28 +76,25 @@ after(async () => {
 });
 
 test("API denies requests without a Supabase access token", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me");
+  const response = await apiRequest({});
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHORIZED");
 });
 
 test("API denies access tokens rejected by the Supabase Auth endpoint", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me", {
-    headers: { authorization: "Bearer invalid-token" },
-  });
+  const response = await apiRequest({ token: "invalid-token" });
   assert.equal(response.status, 401);
 });
 
 test("API returns 503 when the Supabase Auth provider is unavailable", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me", {
-    headers: { authorization: "Bearer auth-provider-error-token" },
-  });
+  const response = await apiRequest({ token: "auth-provider-error-token" });
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error, "AUTH_PROVIDER_UNAVAILABLE");
 });
 
 test("API rejects oversized unauthenticated bodies before JSON parsing", async () => {
-  const response = await fetch(baseUrl + "/api/chat", {
+  const response = await apiRequest({
+    path: "/api/chat",
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ padding: "x".repeat(100_000) }),
@@ -98,57 +103,42 @@ test("API rejects oversized unauthenticated bodies before JSON parsing", async (
 });
 
 test("verified Supabase token resolves to its own immutable user identity", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me", {
-    headers: { authorization: "Bearer user-a-access-token" },
-  });
+  const response = await apiRequest({ token: "user-a-access-token" });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    userId: "00000000-0000-4000-8000-00000000000a",
-    authenticated: true,
-  });
+  assert.deepEqual(await response.json(), { userId: userA, authenticated: true });
 });
 
 test("caller-supplied user ID query cannot override the verified Supabase identity", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me?userId=00000000-0000-4000-8000-00000000000b", {
-    headers: { authorization: "Bearer user-a-access-token" },
+  const response = await apiRequest({
+    token: "user-a-access-token",
+    path: `/api/auth/me?userId=${userB}`,
   });
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).userId, "00000000-0000-4000-8000-00000000000a");
+  assert.equal((await response.json()).userId, userA);
 });
 
 test("different Supabase token resolves to a different user identity", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me", {
-    headers: { authorization: "Bearer user-b-access-token" },
-  });
+  const response = await apiRequest({ token: "user-b-access-token" });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    userId: "00000000-0000-4000-8000-00000000000b",
-    authenticated: true,
-  });
+  assert.deepEqual(await response.json(), { userId: userB, authenticated: true });
 });
 
 test("legacy shared service token is not accepted as user identity", async () => {
-  const response = await fetch(baseUrl + "/api/auth/me", {
-    headers: { authorization: "Bearer integration-test-service-token" },
-  });
+  const response = await apiRequest({ token: "integration-test-service-token" });
   assert.equal(response.status, 401);
 });
 
 test("security administration still requires its separate admin token", async () => {
-  const response = await fetch(baseUrl + "/api/security-status", {
-    headers: { authorization: "Bearer user-a-access-token" },
-  });
+  const response = await apiRequest({ token: "user-a-access-token", path: "/api/security-status" });
   assert.equal(response.status, 403);
 });
 
 test("verified user plus admin token can read simulated security status", async () => {
-  const response = await fetch(baseUrl + "/api/security-status", {
-    headers: {
-      authorization: "Bearer user-a-access-token",
-      "x-voom-admin-token": "integration-test-admin-token",
-    },
+  const response = await apiRequest({
+    token: "user-a-access-token",
+    path: "/api/security-status",
+    headers: { "x-voom-admin-token": "integration-test-admin-token" },
   });
   assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(typeof body.activeProtection, "boolean");
+  assert.equal(typeof (await response.json()).activeProtection, "boolean");
 });
