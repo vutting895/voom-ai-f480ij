@@ -19,7 +19,7 @@ app.use(express.json({ limit: '16kb' }));
 // the caller's access token is validated server-side with Supabase Auth.
 async function authenticateSupabaseUser(req, res, next) {
   const authorization = req.get('authorization') || '';
-  const tokenMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+  const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
@@ -31,7 +31,7 @@ async function authenticateSupabaseUser(req, res, next) {
   }
 
   try {
-    const authResponse = await fetch(`${supabaseUrl.replace(/\\/+$/, '')}/auth/v1/user`, {
+    const authResponse = await fetch(\`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/user\`, {
       method: 'GET',
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${tokenMatch[1]}` },
       signal: AbortSignal.timeout(5000)
