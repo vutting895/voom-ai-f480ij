@@ -115,6 +115,41 @@ class RateLimiterTests(unittest.TestCase):
         self.assertTrue(limiter.allow("client-a", now=10))
 
 
+class OversizedStreamBodyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_oversized_body_without_content_length(self):
+        await self._assert_oversized_body_rejected(content_length=None)
+
+    async def test_rejects_oversized_body_with_understated_content_length(self):
+        await self._assert_oversized_body_rejected(content_length="1")
+
+    async def _assert_oversized_body_rejected(self, content_length):
+        token = "ci-test-token-ci-test-token-ci-test-token-123456"
+        body = b'{"input":"' + (b"x" * (main.MAX_BODY_BYTES + 100)) + b'"}'
+
+        class ChunkedBody(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                yield body[:1024]
+                yield body[1024:]
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        if content_length is not None:
+            headers["Content-Length"] = content_length
+
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/v1/agent/run",
+                content=ChunkedBody(),
+                headers=headers,
+            )
+
+        self.assertEqual(response.status_code, 413)
+        self.assertTrue(response.headers.get("X-Request-ID"))
+
+
 class AgentApiTests(unittest.TestCase):
     def setUp(self):
         self.token = "ci-test-token-ci-test-token-ci-test-token-123456"
