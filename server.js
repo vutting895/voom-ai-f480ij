@@ -38,7 +38,7 @@ async function verifySupabaseAccessToken(authClient, accessToken) {
   try {
     const { data, error } = await authClient.auth.getUser(accessToken);
     if (error) {
-      const rejectedToken = error.name === 'AuthApiError' || error.status === 401 || error.status === 403;
+      const rejectedToken = error.status === 401 || error.status === 403;
       return { error: rejectedToken ? 'UNAUTHORIZED' : 'AUTH_PROVIDER_UNAVAILABLE', status: rejectedToken ? 401 : 503 };
     }
     if (!data?.user?.id) return { error: 'UNAUTHORIZED', status: 401 };
