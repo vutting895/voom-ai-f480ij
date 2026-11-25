@@ -24,7 +24,7 @@ before(async () => {
       res.writeHead(404).end();
       return;
     }
-    const token = (req.headers.authorization || "").replace(/^Bearer\\s+/i, "");
+    const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
     if (token === "auth-provider-error-token") {
       res.writeHead(500, { "content-type": "application/json" });
       res.end(JSON.stringify({ message: "Auth service unavailable" }));
