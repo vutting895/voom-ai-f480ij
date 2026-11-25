@@ -23,7 +23,7 @@ The Headless adapter defaults to Claude Code print mode and `--permission-mode p
 
 1. Bind local services to loopback during development. Do not expose Ollama's unauthenticated local API to the public internet.
 2. Keep provider keys in environment secrets; never commit credentials.
-3. Apply authentication, tenant authorization, rate limits, request-size limits, and audit logging before exposing internal endpoints.
+3. The current Python endpoint uses a high-entropy shared service bearer token, a per-process Dev/Test rate limiter, request-size/prompt limits, request IDs, and metadata-only audit logs. This is service authentication only: it does not authenticate Supabase users or prove tenant isolation. Keep it loopback-only; do not expose it until the Node gateway forwards a verifiable user/tenant context over an independently authenticated service boundary.
 4. Do not pass untrusted model output directly to tools or execution systems.
 5. Human approval must be enforced by the application authorization layer, not by model instructions.
 6. Before enabling Headless process execution, use a disposable unprivileged container with a read-only workspace mount, restricted network egress, minimal environment, resource limits, timeout, and bounded output.
@@ -36,8 +36,8 @@ The Headless adapter defaults to Claude Code print mode and `--permission-mode p
 - Agent tool registry, handoffs, guardrails, durable sessions, and memory integration.
 - Explicit human-approval workflow and auditable action lifecycle.
 - Integration tests against a disposable Ollama instance and a mock OpenAI-compatible server.
-- Authentication and tenant isolation between the existing backend and Python service.
-- Python dependency installation/import tests, live Ollama integration, load tests, provider capability matrix, and security review.
+- Supabase user authentication and tenant isolation across the existing backend and Python service (not implemented by the shared service token).
+- Python dependency installation/import/API security tests and SBOM generation are added to CI; exact transitive lock/hash review, successful new CI evidence, live Ollama integration, load tests, provider capability matrix, and security review remain open.
 - Headless sandbox implementation and process-level integration tests.
 
 ## Validation status
@@ -47,3 +47,12 @@ GitHub Actions run [#45](https://github.com/vutting895/voom-ai-f480ij/actions/ru
 - Python 3.12: `python -m compileall -q services/agent-python/app` passed.
 
 The Headless command-builder tests are newly added and await the next CI run. Python dependencies were not installed by the workflow, so this remains syntax validation only—not proof that the Agents SDK service imports or runs. Live Ollama inference has not been tested. Do not treat this slice as production-ready.
+
+
+## Security follow-up status
+
+The Python Dev/Test endpoint now requires a configured bearer token of at least 32 characters, uses constant-time comparison, applies a per-process fixed-window rate limiter, bounds the declared request body and prompt, emits an `X-Request-ID`, and logs request outcomes without logging prompts or bearer tokens. The Ollama URL defaults to loopback; remote hosts require an explicit allowlist entry and HTTPS.
+
+**Important limitation:** the shared bearer token authenticates only a trusted service caller. It is not Supabase user authentication and does not establish tenant membership. The Python service must remain loopback-only and must not be exposed to browsers or public networks. Per-user/per-tenant authorization must be enforced by the authenticated gateway and a reviewed service-to-service identity before network exposure.
+
+The Python CI now installs pinned direct dependencies, executes API/security tests, runs `pip-audit`, and uploads a resolved dependency inventory plus CycloneDX SBOM. The direct requirements are pinned; the full transitive dependency graph is captured at CI runtime but is not yet committed as a hash-locked requirements file.
